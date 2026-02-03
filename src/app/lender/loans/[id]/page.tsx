@@ -135,23 +135,22 @@ export default function LoanDetailsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex">
       <div className="flex-1 lg:ml-0">
         <div className="lg:hidden h-16" />
 
-        <header className="border-b border-border bg-card">
-          <div className="px-4 sm:px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Loan Details</h2>
-                <p className="text-sm text-muted-foreground mt-1">{loan.loan_number}</p>
+        <main className="flex-1 ml-64 bg-background min-h-screen">
+          <header className="border-b border-border bg-card">
+            <div className="px-4 sm:px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">Loan Details</h2>
+                  <p className="text-sm text-muted-foreground mt-1">{loan.loan_number}</p>
+                </div>
+                {getStatusBadge(loan.status)}
               </div>
-              {getStatusBadge(loan.status)}
             </div>
-          </div>
-        </header>
-
-        <main className="p-4 sm:p-6 space-y-6">
+          </header>
           {error && (
             <Card className="p-4 border-destructive/30 bg-destructive/5">
               <div className="flex items-start gap-3">
@@ -160,7 +159,6 @@ export default function LoanDetailsPage() {
               </div>
             </Card>
           )}
-
           {/* Activate Button for Approved Loans */}
           {loan.status === "approved" && (
             <Card className="p-6 bg-blue-50 border-blue-200">
@@ -177,7 +175,6 @@ export default function LoanDetailsPage() {
               </div>
             </Card>
           )}
-
           {/* Active Loan Success Message */}
           {loan.status === "active" && (
             <Card className="p-6 bg-green-50 border-green-200">
@@ -190,7 +187,6 @@ export default function LoanDetailsPage() {
               </div>
             </Card>
           )}
-
           {/* Borrower Information */}
           {loan.borrower && (
             <Card className="p-6">
@@ -210,7 +206,6 @@ export default function LoanDetailsPage() {
               </div>
             </Card>
           )}
-
           {/* Loan Details */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -264,7 +259,6 @@ export default function LoanDetailsPage() {
               </div>
             </div>
           </Card>
-
           {/* Documents */}
           {loan.documents && loan.documents.length > 0 && (
             <Card className="p-6">
@@ -296,7 +290,6 @@ export default function LoanDetailsPage() {
               </div>
             </Card>
           )}
-
           {/* Dates */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">

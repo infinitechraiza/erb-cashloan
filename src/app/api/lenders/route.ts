@@ -14,12 +14,12 @@ export async function GET(request: NextRequest) {
 
     // Only allow admin users
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const url = new URL(`${laravelUrl}/api/loan-officers`);
+    const url = new URL(`${laravelUrl}/api/lenders`);
 
     // Forward query params (like ?q=searchTerm)
     request.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value));
 
-    console.log("[Next.js] Fetching loan officers from Laravel:", url.toString());
+    console.log("[Next.js] Fetching lenders from Laravel:", url.toString());
 
     const response = await fetch(url.toString(), {
       method: "GET",
@@ -42,17 +42,17 @@ export async function GET(request: NextRequest) {
       console.error("[Next.js] Laravel error response:", errorBody);
 
       return NextResponse.json(
-        { message: errorBody.message || "Failed to fetch loan officers", errors: errorBody.errors || {} },
+        { message: errorBody.message || "Failed to fetch lenders", errors: errorBody.errors || {} },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    console.log("[Next.js] Loan officers fetched successfully:", data);
+    console.log("[Next.js] Lenders fetched successfully:", data);
 
     return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
-    console.error("[Next.js] GET /api/loan-officers error:", error);
+    console.error("[Next.js] GET /api/lenders error:", error);
 
     if (error?.code === "ECONNREFUSED") {
       return NextResponse.json(

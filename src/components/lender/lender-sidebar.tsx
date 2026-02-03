@@ -1,59 +1,50 @@
-'use client';
+"use client"
 
-import { useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/components/auth-context';
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  Building2
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/components/auth-context"
+import { LayoutDashboard, FileText, Users, Settings, LogOut, Menu, X, Building2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const navigation = [
   {
-    name: 'Dashboard',
-    href: '/lender',
+    name: "Dashboard",
+    href: "/lender",
     icon: LayoutDashboard,
   },
   {
-    name: 'Loans',
-    href: '/lender/loans',
+    name: "Loans",
+    href: "/lender/loans",
     icon: FileText,
   },
   {
-    name: 'Borrowers',
-    href: '/lender/borrowers',
+    name: "Borrowers",
+    href: "/lender/borrowers",
     icon: Users,
   },
   {
-    name: 'Settings',
-    href: '/lender/settings',
+    name: "Settings",
+    href: "/lender/settings",
     icon: Settings,
   },
-];
+]
 
 export function LenderSidebar() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const { user, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user, logout } = useAuth()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleLogout = () => {
-    logout();
-    router.push('/');
-  };
+    logout()
+    router.push("/")
+  }
 
   const handleNavigation = (href: string) => {
-    router.push(href);
-    setMobileMenuOpen(false);
-  };
+    router.push(href)
+    setMobileMenuOpen(false)
+  }
 
   return (
     <>
@@ -64,34 +55,21 @@ export function LenderSidebar() {
             <Building2 className="h-6 w-6 text-primary" />
             <span className="font-semibold text-lg">Lender Portal</span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
+          <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
         </div>
       </div>
 
       {/* Mobile menu overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      {mobileMenuOpen && <div className="lg:hidden fixed inset-0 bg-black/50 z-40" onClick={() => setMobileMenuOpen(false)} />}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-40 h-screen transition-transform bg-card border-r border-border',
-          'w-64 lg:translate-x-0',
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          "fixed top-0 left-0 z-40 h-screen transition-transform bg-card border-r border-border",
+          "w-64 lg:translate-x-0",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex flex-col h-full">
@@ -105,31 +83,26 @@ export function LenderSidebar() {
           <div className="px-6 py-4 border-b border-border">
             <p className="text-sm font-medium">{user?.first_name}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
-            <p className="text-xs text-muted-foreground mt-1 capitalize">
-              Role: {user?.role}
-            </p>
+            <p className="text-xs text-muted-foreground mt-1 capitalize">Role: {user?.role}</p>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-              const Icon = item.icon;
-              
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
+              const Icon = item.icon
+
               return (
                 <Button
                   key={item.name}
-                  variant={isActive ? 'secondary' : 'ghost'}
-                  className={cn(
-                    'w-full justify-start gap-3',
-                    isActive && 'bg-primary/10 text-primary hover:bg-primary/15'
-                  )}
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn("w-full justify-start gap-3", isActive && "bg-primary/10 text-primary hover:bg-primary/15")}
                   onClick={() => handleNavigation(item.href)}
                 >
                   <Icon className="h-5 w-5" />
                   {item.name}
                 </Button>
-              );
+              )
             })}
           </nav>
 
@@ -147,5 +120,5 @@ export function LenderSidebar() {
         </div>
       </aside>
     </>
-  );
+  )
 }

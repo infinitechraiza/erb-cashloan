@@ -7,14 +7,15 @@ import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle2, XCircle, Eye, FileText, Loader2, Download } from "lucide-react"
+import { CheckCircle2, XCircle, Eye, FileText, Loader2, Download, Edit2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { Separator } from "@/components/ui/separator"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ColumnDef } from "@tanstack/react-table"
+import { DataTable } from "@/components/data-table"
 
 interface LoanApplication {
   id: number
@@ -58,27 +59,20 @@ interface LoanApplication {
   }>
 }
 
-interface LoanOfficer {
+interface Lender {
   id: number
-  name: string
-  email: string
-}
-
-interface LoanDocument {
-  id: number
-  file_name?: string
-  name?: string
-  uploaded_at?: string
-  created_at?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
+  first_name: string
+  last_name: string
+  email?: string
 }
 
 const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-800",
-  active: "bg-blue-100 text-blue-800",
+  pending: "bg-yellow-100 text-yellow-700 capitalize",
+  approved: "bg-blue-100 text-blue-700 capitalize",
+  rejected: "bg-red-100 text-red-700 capitalize",
+  active: "bg-green-100 text-green-700 capitalize",
+  completed: "bg-gray-100 text-gray-700 capitalize",
+  defaulted: "bg-black text-white capitalize",
 }
 
 export default function ApplicationsPage() {
@@ -87,10 +81,25 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<LoanApplication[]>([])
   const [selectedApp, setSelectedApp] = useState<LoanApplication | null>(null)
   const [appLoading, setAppLoading] = useState(true)
-  const [downloadingDoc, setDownloadingDoc] = useState<number | null>(null)
+  const [lenders, setLenders] = useState<Lender[]>([])
+
+  //stats
+  const [loanStats, setLoanStats] = useState<{
+    total_loans: number
+    pending_loans: number
+    active_loans: number
+    total_disbursed: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+
+  // Pagination state
+  const [pageIndex, setPageIndex] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Search state
+  const [search, setSearch] = useState("")
 
   // Modal states
-  const [showViewModal, setShowViewModal] = useState(false)
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
 
@@ -103,14 +112,37 @@ export default function ApplicationsPage() {
   // Approve form states
   const [approvedAmount, setApprovedAmount] = useState("")
   const [approvedRate, setApprovedRate] = useState("")
-  const [loanOfficerId, setLoanOfficerId] = useState<number | null>(null)
 
   // Reject form state
   const [rejectionReason, setRejectionReason] = useState("")
 
-  // Loan officers for auto-suggest
-  const [loanOfficers, setLoanOfficers] = useState<LoanOfficer[]>([])
-  const [loanOfficerSearch, setLoanOfficerSearch] = useState("")
+  // update modal
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [status, setStatus] = useState("")
+  const [interestRate, setInterestRate] = useState("")
+  const [notes, setNotes] = useState("")
+  const [updating, setUpdating] = useState(false)
+  const [selectedLenderId, setSelectedLenderId] = useState<number | null>(null)
+
+  const fetchLoanStatistics = async () => {
+    try {
+      setStatsLoading(true)
+      const token = localStorage.getItem("token")
+      if (!token) throw new Error("Not authenticated")
+
+      const res = await fetch(`/api/loans/statistics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) throw new Error("Failed to fetch statistics")
+      const data = await res.json()
+      setLoanStats(data.data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
 
   const fetchApplications = async () => {
     try {
@@ -129,29 +161,183 @@ export default function ApplicationsPage() {
     }
   }
 
-  // Fetch loan officers for auto-suggest
-  useEffect(() => {
-    if (!loanOfficerSearch || user?.role !== "admin") return
-    const timeout = setTimeout(async () => {
-      try {
-        const token = localStorage.getItem("token")
-        const res = await fetch(`/api/loan-officers?q=${encodeURIComponent(loanOfficerSearch)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) throw new Error("Failed to fetch loan officers")
-        const data = await res.json()
-        setLoanOfficers(data.loan_officers)
-      } catch (err) {
-        console.error(err)
-      }
-    }, 300) // debounce 300ms
-
-    return () => clearTimeout(timeout)
-  }, [loanOfficerSearch, user?.role])
+  const fetchLenders = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch("/api/lenders", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("Failed to fetch lenders")
+      const data = await res.json()
+      setLenders(data.lenders)
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   useEffect(() => {
+    fetchLoanStatistics()
     fetchApplications()
+    fetchLenders()
   }, [])
+
+  const getColumns = (
+    statusColors: Record<string, string>,
+    setSelectedApp: any,
+    setStatus: any,
+    setApprovedAmount: any,
+    setInterestRate: any,
+    setNotes: any,
+    setRejectionReason: any,
+    setShowUpdateModal: any,
+    router: any,
+  ): ColumnDef<LoanApplication, any>[] => [
+    { header: "Loan Number", accessorKey: "id" },
+    {
+      header: "Borrower",
+      accessorFn: (row) => (row.borrower ? `${row.borrower.first_name} ${row.borrower.last_name}` : "N/A"),
+    },
+    { header: "Type", accessorKey: "type" },
+    {
+      header: "Principal Amount",
+      accessorFn: (row) => `₱${Number(row.principal_amount).toLocaleString()}`,
+    },
+    {
+      header: "Approved Amount",
+      accessorFn: (row) => (row.approved_amount ? `₱${Number(row.approved_amount).toLocaleString()}` : "-"),
+    },
+    { header: "Rate", accessorFn: (row) => `${row.interest_rate}%` },
+    {
+      header: "Status",
+      accessorKey: "status",
+      cell: ({ row }) => <Badge className={statusColors[row.original.status] || "bg-gray-100"}>{row.original.status}</Badge>,
+    },
+    { header: "Submitted", accessorFn: (row) => new Date(row.created_at).toLocaleDateString() },
+    {
+      header: "Actions",
+      cell: ({ row }) => {
+        const loan = row.original
+
+        return (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/loans/${loan.id}`)}>
+              <Eye className="h-4 w-4 text-blue-500" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedApp(loan)
+                setStatus(loan.status)
+                setApprovedAmount(loan.approved_amount ?? "")
+                setInterestRate(loan.interest_rate ?? "")
+                setNotes(loan.notes ?? "")
+                setRejectionReason(loan.rejection_reason ?? "")
+                setShowUpdateModal(true)
+              }}
+            >
+              <Edit2 className="h-4 w-4 text-green-500" />
+            </Button>
+
+            <Select
+              value={row.original.status}
+              onValueChange={(value) => {
+                const loan = row.original
+                setSelectedApp(loan)
+
+                switch (value) {
+                  case "approved":
+                    setApprovedAmount(loan.approved_amount ?? "")
+                    setApprovedRate(loan.interest_rate ?? "")
+                    setShowApproveModal(true)
+                    break
+
+                  case "rejected":
+                    setRejectionReason(loan.rejection_reason ?? "")
+                    setShowRejectModal(true)
+                    break
+
+                  case "active":
+                    setActivateStartDate(loan.start_date ?? "")
+                    setActivateFirstPaymentDate(loan.first_payment_date ?? "")
+                    setShowActivateModal(true)
+                    break
+
+                  default:
+                    // For other status changes, use update modal
+                    setStatus(value)
+                    setNotes(loan.notes ?? "")
+                    setShowUpdateModal(true)
+                    break
+                }
+              }}
+            >
+              <SelectTrigger className="w-[140px] text-sm border-gray-100">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="pending" disabled={loan.status === "completed" || loan.status === "defaulted"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                    Pending
+                  </span>
+                </SelectItem>
+
+                <SelectItem value="approved" disabled={loan.status !== "pending"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-blue-600" />
+                    Approved
+                  </span>
+                </SelectItem>
+
+                <SelectItem value="rejected" disabled={loan.status !== "pending"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-600" />
+                    Rejected
+                  </span>
+                </SelectItem>
+
+                <SelectItem value="active" disabled={loan.status !== "approved"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-green-600" />
+                    Active
+                  </span>
+                </SelectItem>
+
+                <SelectItem value="completed" disabled={loan.status !== "active"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-gray-600" />
+                    Completed
+                  </span>
+                </SelectItem>
+
+                <SelectItem value="defaulted" disabled={loan.status !== "completed"}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-black" />
+                    Defaulted
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const columns = getColumns(
+    statusColors,
+    setSelectedApp,
+    setStatus,
+    setApprovedAmount,
+    setInterestRate,
+    setNotes,
+    setRejectionReason,
+    setShowUpdateModal,
+    router,
+  )
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (!authenticated || !["admin", "loan_officer"].includes(user?.role || "")) {
@@ -194,6 +380,7 @@ export default function ApplicationsPage() {
       setActivateFirstPaymentDate("")
       setSelectedApp(null)
       fetchApplications()
+      fetchLoanStatistics()
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred"
       toast.error("Error activating loan", { description: message })
@@ -203,7 +390,7 @@ export default function ApplicationsPage() {
   }
 
   const handleApprove = async () => {
-    if (!approvedAmount || !loanOfficerId) {
+    if (!approvedAmount) {
       toast.error("Error", { description: "Amount and officer are required" })
       return
     }
@@ -212,11 +399,12 @@ export default function ApplicationsPage() {
       const token = localStorage.getItem("token")
       if (!token) throw new Error("Not authenticated")
 
-      const body = {
+      const body: Record<string, any> = {
         approved_amount: Number(approvedAmount),
         interest_rate: approvedRate ? Number(approvedRate) : undefined,
-        loan_officer_id: loanOfficerId,
       }
+
+      if (selectedLenderId) body.lender_id = selectedLenderId
 
       const res = await fetch(`/api/loans/${selectedApp?.id}/approve`, {
         method: "POST",
@@ -239,13 +427,11 @@ export default function ApplicationsPage() {
       // Reset form
       setApprovedAmount("")
       setApprovedRate("")
-      setLoanOfficerId(null)
-      setLoanOfficerSearch("")
       setSelectedApp(null)
       setShowApproveModal(false)
 
-      // Refetch applications
       fetchApplications()
+      fetchLoanStatistics()
     } catch (err) {
       console.error(err)
       toast.error("Error", {
@@ -288,54 +474,80 @@ export default function ApplicationsPage() {
       setShowRejectModal(false)
 
       fetchApplications()
+      fetchLoanStatistics()
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "An error occurred"
       toast.error("Error", { description: errorMsg })
     }
   }
 
-  const handleDownloadDocument = async (doc: LoanDocument) => {
-    setDownloadingDoc(doc.id)
-    const loanId = selectedApp?.id
-    if (!loanId) return
+  const handleUpdateLoan = async () => {
+    if (!selectedApp) return
+    setUpdating(true)
+
     try {
       const token = localStorage.getItem("token")
-      if (!token) throw new Error("Not authenticated")
+      if (!token) throw new Error("Unauthorized")
 
-      const response = await fetch(`/api/loans/${loanId}/documents/${doc.id}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const payload: Record<string, any> = {}
 
-      if (!response.ok) {
-        throw new Error(`Failed to download document (${response.status})`)
+      if (status && status !== selectedApp.status) payload.status = status
+
+      if (approvedAmount !== "") payload.approved_amount = Number(approvedAmount)
+
+      if (interestRate !== "") payload.interest_rate = Number(interestRate)
+
+      if (notes !== "") payload.notes = notes
+
+      if (status === "rejected" && rejectionReason !== "") payload.rejection_reason = rejectionReason
+      // Assign lender if admin and selected
+      if (user?.role === "admin" && selectedLenderId) {
+        payload.lender_id = selectedLenderId
       }
 
-      const blob = await response.blob()
-
-      const fileName = doc.file_name || `document_${doc.id}.pdf`
-
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-
-      a.remove()
-      window.URL.revokeObjectURL(url)
-
-      toast.success("Success", {
-        description: "Document downloaded successfully",
+      const res = await fetch(`/api/loans/${selectedApp.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
       })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || "Update failed")
+      }
+
+      toast.success("Loan updated successfully")
+
+      setShowUpdateModal(false)
+      setSelectedApp(null)
+      fetchApplications()
+      fetchLoanStatistics()
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to download document"
-      toast.error("Error", {
-        description: errorMsg,
-      })
+      toast.error(err instanceof Error ? err.message : "Failed to update loan")
     } finally {
-      setDownloadingDoc(null)
+      setUpdating(false)
     }
   }
+
+  const normalizedSearch = search.toLowerCase()
+
+  const filteredData = applications.filter((app) => {
+    if (normalizedSearch === "") return true
+
+    return (
+      String(app.id).includes(normalizedSearch) ||
+      app.borrower?.first_name?.toLowerCase().includes(normalizedSearch) ||
+      app.borrower?.last_name?.toLowerCase().includes(normalizedSearch)
+    )
+  })
+
+  const paginatedData = filteredData.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+  const pageCount = Math.ceil(filteredData.length / pageSize)
+
   return (
     <div className="flex">
       <AdminSidebar />
@@ -347,253 +559,34 @@ export default function ApplicationsPage() {
           </div>
         </header>
 
-        <div className="px-8 py-8">
-          <Card className="overflow-hidden p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/50">
-                    <TableHead>Loan Number</TableHead>
-                    <TableHead>Borrower</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {appLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        Loading applications...
-                      </TableCell>
-                    </TableRow>
-                  ) : applications.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        No pending applications
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    applications.map((app) => (
-                      <TableRow key={app.id} className="hover:bg-muted/50">
-                        <TableCell>{app.id}</TableCell>
-                        <TableCell>{app.borrower ? `${app.borrower.first_name} ${app.borrower.last_name}` : "N/A"}</TableCell>
-                        <TableCell className="capitalize">{app.type}</TableCell>
-                        <TableCell>₱{parseFloat(app.principal_amount).toLocaleString()}</TableCell>
-                        <TableCell>{app.interest_rate}%</TableCell>
-                        <TableCell>
-                          <Badge className={statusColors[app.status] || "bg-gray-100"}>{app.status}</Badge>
-                        </TableCell>
-                        <TableCell>{new Date(app.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedApp(app)
-                              setShowViewModal(true)
-                            }}
-                          >
-                            <Eye className="h-4 w-4 text-green-300" />
-                          </Button>
-
-                          {app.status === "pending" && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedApp(app)
-                                  setApprovedAmount(app.principal_amount)
-                                  setApprovedRate(app.interest_rate)
-                                  setShowApproveModal(true)
-                                }}
-                              >
-                                <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                              </Button>
-
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedApp(app)
-                                  setShowRejectModal(true)
-                                }}
-                              >
-                                <XCircle className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </>
-                          )}
-
-                          {app.status === "approved" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedApp(app)
-                                setActivateStartDate(app.start_date || "")
-                                setActivateFirstPaymentDate(app.first_payment_date || "")
-                                setShowActivateModal(true)
-                              }}
-                            >
-                              <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+        <div className="mt-8 grid grid-cols-4 gap-4 mb-6">
+          <Card className="p-4 text-center">
+            <h3 className="text-sm font-medium text-muted-foreground">Total Loans</h3>
+            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.total_loans ?? 0)}</p>
+          </Card>
+          <Card className="p-4 text-center">
+            <h3 className="text-sm font-medium text-muted-foreground">Pending Loans</h3>
+            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.pending_loans ?? 0)}</p>
+          </Card>
+          <Card className="p-4 text-center">
+            <h3 className="text-sm font-medium text-muted-foreground">Active Loans</h3>
+            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.active_loans ?? 0)}</p>
+          </Card>
+          <Card className="p-4 text-center">
+            <h3 className="text-sm font-medium text-muted-foreground">Total Disbursed</h3>
+            <p className="text-xl font-bold">{statsLoading ? "..." : `₱${Number(loanStats?.total_disbursed ?? 0).toLocaleString()}`}</p>
           </Card>
         </div>
 
-        {/* View Modal */}
-        <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
-            {selectedApp && (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="text-lg font-bold">Loan Application Details</DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-4">
-                  {/* Borrower & Loan Info in grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border rounded-md p-4">
-                    {/* Borrower Info */}
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Borrower</h3>
-                      <p className="text-xs text-muted-foreground">Name</p>
-                      <p className="font-medium">
-                        {selectedApp.borrower?.first_name} {selectedApp.borrower?.last_name}
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">Email</p>
-                      <p className="font-medium">{selectedApp.borrower?.email || "-"}</p>
-
-                      <p className="text-xs text-muted-foreground">Employment</p>
-                      <p className="font-medium capitalize">{selectedApp.employment_status || "-"}</p>
-                    </div>
-
-                    {/* Loan Info */}
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Loan</h3>
-                      <p className="text-xs text-muted-foreground">Type</p>
-                      <p className="font-medium capitalize">{selectedApp.type}</p>
-
-                      <p className="text-xs text-muted-foreground">Requested</p>
-                      <p className="font-medium">₱{parseFloat(selectedApp.principal_amount).toLocaleString()}</p>
-
-                      <p className="text-xs text-muted-foreground">Approved</p>
-                      <p className="font-medium">
-                        {selectedApp.approved_amount ? `₱${parseFloat(selectedApp.approved_amount).toLocaleString()}` : "-"}
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">Rate</p>
-                      <p className="font-medium">{selectedApp.interest_rate}%</p>
-
-                      <p className="text-xs text-muted-foreground">Term</p>
-                      <p className="font-medium">{selectedApp.term_months || "-"} months</p>
-
-                      <p className="text-xs text-muted-foreground">Status</p>
-                      <Badge className={statusColors[selectedApp.status]}>{selectedApp.status}</Badge>
-
-                      <p className="text-xs text-muted-foreground">Outstanding</p>
-                      <p className="font-medium">
-                        ₱{selectedApp.outstanding_balance ? parseFloat(selectedApp.outstanding_balance).toLocaleString() : "0"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Dates & Notes */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border rounded-md p-4">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Dates</h3>
-                      <p className="text-xs text-muted-foreground">Start</p>
-                      <p className="font-medium">{selectedApp.start_date || "-"}</p>
-
-                      <p className="text-xs text-muted-foreground">First Payment</p>
-                      <p className="font-medium">{selectedApp.first_payment_date || "-"}</p>
-
-                      <p className="text-xs text-muted-foreground">Created</p>
-                      <p className="font-medium">{new Date(selectedApp.created_at).toLocaleString()}</p>
-
-                      <p className="text-xs text-muted-foreground">Updated</p>
-                      <p className="font-medium">{new Date(selectedApp.updated_at).toLocaleString()}</p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Notes</h3>
-                      <p className="text-xs text-muted-foreground">General</p>
-                      <p className="font-medium">{selectedApp.notes || "-"}</p>
-
-                      <p className="text-xs text-muted-foreground">Rejection Reason</p>
-                      <p className="font-medium">{selectedApp.rejection_reason || "-"}</p>
-                    </div>
-                  </div>
-
-                  {/* Lender & Officer */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border rounded-md p-4">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Borrower</h3>
-                      <p className="font-medium">
-                        {selectedApp.borrower?.first_name} {selectedApp.borrower?.last_name} ({selectedApp.borrower?.email || "-"})
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Lender</h3>
-                      <p className="font-medium">
-                        {selectedApp.lender?.first_name} {selectedApp.lender?.last_name} ({selectedApp.lender?.email || "-"})
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Loan Officer</h3>
-                      <p className="font-medium">
-                        {selectedApp.loan_officer?.first_name} {selectedApp.loan_officer?.last_name} ({selectedApp.loan_officer?.email || "-"})
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Documents */}
-                  {selectedApp?.documents?.length ? (
-                    <>
-                      <Separator />
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-semibold">Documents ({selectedApp.documents.length})</h4>
-                        <div className="space-y-1">
-                          {selectedApp.documents.map((doc) => (
-                            <Card key={doc.id} className="p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                                  <div className="truncate text-sm font-medium w-full max-w-[180px]">
-                                    {doc.name || doc.file_name || `Document ${doc.id}`}
-                                  </div>
-                                </div>
-                                <Button size="sm" variant="outline" onClick={() => handleDownloadDocument(doc)} disabled={downloadingDoc === doc.id}>
-                                  {downloadingDoc === doc.id ? (
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                  ) : (
-                                    <Download className="h-4 w-4 mr-1" />
-                                  )}
-                                  Download
-                                </Button>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
+        <div className="px-8 py-4">
+          <DataTable
+            columns={columns}
+            data={applications}
+            search={search}
+            onSearchChange={(val) => setSearch(val)}
+            searchFields={["id", "borrower"]}
+          />
+        </div>
 
         {/* Activate Loan Modal */}
         <Dialog open={showActivateModal} onOpenChange={setShowActivateModal}>
@@ -642,6 +635,25 @@ export default function ApplicationsPage() {
               <DialogTitle>Approve Loan #{selectedApp?.loan_number}</DialogTitle>
             </DialogHeader>
 
+            {/* Lender Assignment (Admin only) */}
+            {user?.role === "admin" && (
+              <div className="space-y-1">
+                <Label>Assign Lender</Label>
+                <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Lender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lenders.map((lender) => (
+                      <SelectItem key={lender.id} value={lender.id.toString()}>
+                        {lender.first_name} {lender.last_name} ({lender.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-4">
               {/* Approved Amount */}
               <div className="space-y-2">
@@ -665,34 +677,6 @@ export default function ApplicationsPage() {
                   value={approvedRate}
                   onChange={(e) => setApprovedRate(e.target.value)}
                 />
-              </div>
-
-              {/* Loan Officer Search + Select */}
-              <div className="space-y-2 relative">
-                <Label htmlFor="loanOfficerSearch">Assign Loan Officer</Label>
-                <Input
-                  id="loanOfficerSearch"
-                  placeholder="Search Loan Officer..."
-                  value={loanOfficerSearch}
-                  onChange={(e) => setLoanOfficerSearch(e.target.value)}
-                />
-
-                {loanOfficerSearch && loanOfficers.length > 0 && (
-                  <div className="absolute z-50 w-full bg-white border rounded-md shadow-md max-h-60 overflow-auto mt-1">
-                    {loanOfficers.map((officer) => (
-                      <div
-                        key={officer.id}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => {
-                          setLoanOfficerId(officer.id)
-                          setLoanOfficerSearch(officer.name)
-                        }}
-                      >
-                        {officer.name} ({officer.email})
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <Button className="w-full" onClick={handleApprove}>
@@ -725,6 +709,75 @@ export default function ApplicationsPage() {
                 Cancel
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Update Modal */}
+        <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Update Loan #{selectedApp?.id}</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Status */}
+              <div>
+                <Label>Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["pending", "approved", "rejected", "active", "completed", "defaulted"].map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Lender Assignment (Admin only) */}
+              {user?.role === "admin" && (
+                <div className="space-y-1">
+                  <Label>Assign Lender</Label>
+                  <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Lender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lenders.map((lender) => (
+                        <SelectItem key={lender.id} value={lender.id.toString()}>
+                          {lender.first_name} {lender.last_name} ({lender.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Approved Amount */}
+              <div>
+                <Label>Approved Amount</Label>
+                <Input type="number" value={approvedAmount} onChange={(e) => setApprovedAmount(e.target.value)} />
+              </div>
+
+              {/* Interest Rate */}
+              <div>
+                <Label>Interest Rate (%)</Label>
+                <Input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label>Notes</Label>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+
+              <Button className="w-full" onClick={handleUpdateLoan} disabled={updating}>
+                {updating ? "Updating..." : "Update Loan"}
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </main>
