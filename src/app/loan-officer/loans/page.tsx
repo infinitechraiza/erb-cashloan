@@ -28,8 +28,12 @@ import {
   Check,
   Cross,
   X,
+  CheckCheckIcon,
+  Edit,
 } from "lucide-react"
 import { LoanOfficerSidebar } from "@/components/loan-officer/loan-officer-sidebar"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Loan {
   id: number
@@ -69,11 +73,18 @@ export default function LenderLoansPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
-  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null)
   const [showLoanModal, setShowLoanModal] = useState(false)
-  const [loadingLoan, setLoadingLoan] = useState(false)
-  const [loanOfficerMap, setLoanOfficerMap] = useState<Record<number, number>>({})
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
 
+  const [status, setStatus] = useState("")
+  const [approvedAmount, setApprovedAmount] = useState("")
+  const [interestRate, setInterestRate] = useState("")
+  const [notes, setNotes] = useState("")
+  const [rejectionReason, setRejectionReason] = useState("")
+  const [activateStartDate, setActivateStartDate] = useState("")
+  const [activateFirstPaymentDate, setActivateFirstPaymentDate] = useState("")
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
     if (!authenticated && !authLoading) {
@@ -125,34 +136,14 @@ export default function LenderLoansPage() {
     }
   }
 
-  const fetchLoanDetails = async (loanId: number) => {
-    setLoadingLoan(true)
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`/api/loans/${loanId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch loan details")
-      }
-
-      const data = await response.json()
-      setSelectedLoan(data.loan)
-      setShowLoanModal(true)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to load loan details")
-    } finally {
-      setLoadingLoan(false)
-    }
-  }
-
-  const handleViewDetails = (loanId: number, e?: React.MouseEvent) => {
+  const handleViewDetails = (loan: Loan, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault()
       e.stopPropagation()
     }
-    fetchLoanDetails(loanId)
+
+    setSelectedLoan(loan)
+    setShowLoanModal(true)
   }
 
   // Helper function to get borrower name
@@ -215,6 +206,70 @@ export default function LenderLoansPage() {
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
+  }
+
+  const openUpdateModal = (loan: Loan, newStatus?: string) => {
+    setSelectedLoan(loan)
+
+    setStatus(newStatus ?? loan.status)
+    setApprovedAmount("")
+    setInterestRate(loan.interest_rate ?? "")
+    setNotes("")
+    setRejectionReason("")
+    setActivateStartDate("")
+    setActivateFirstPaymentDate("")
+
+    setShowUpdateModal(true)
+  }
+
+  const handleUpdateLoan = async () => {
+    if (!selectedLoan) return
+
+    setUpdating(true)
+
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) throw new Error("Unauthorized")
+
+      const payload: Record<string, any> = {}
+
+      if (status && status !== selectedLoan.status) payload.status = status
+      if (approvedAmount !== "") payload.approved_amount = Number(approvedAmount)
+      if (interestRate !== "") payload.interest_rate = Number(interestRate)
+      if (notes) payload.notes = notes
+      if (rejectionReason) payload.reason = rejectionReason
+
+      if (status === "active") {
+        payload.start_date = activateStartDate
+        payload.first_payment_date = activateFirstPaymentDate
+      }
+
+      const response = await fetch(`/api/loans/${selectedLoan.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.message || "Failed to update loan")
+      }
+
+      const data = await response.json()
+
+      // update local list
+      setLoans((prev) => prev.map((l) => (l.id === selectedLoan.id ? data.loan : l)))
+
+      setShowUpdateModal(false)
+      setSelectedLoan(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed")
+    } finally {
+      setUpdating(false)
+    }
   }
 
   return (
@@ -412,37 +467,49 @@ export default function LenderLoansPage() {
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 min-w-[260px]">
-                      {/* Assign Loan Officer */}
-                      <Select
-                        value={loanOfficerMap[loan.id]?.toString()}
-                        onValueChange={(value) =>
-                          setLoanOfficerMap((prev) => ({
-                            ...prev,
-                            [loan.id]: Number(value),
-                          }))
-                        }
+                      {/* View */}
+                      <Button
+                        variant="outline"
+                        onClick={(e) => handleViewDetails(loan, e)}
+                        className="w-full sm:w-auto"
+                        type="button"
+                        title="View Details"
                       >
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                          <SelectValue placeholder="Assign officer" />
+                        <Eye className="h-4 w-4" />
+                      </Button>
+
+                      {/* Edit */}
+                      <Button variant="outline" onClick={() => openUpdateModal(loan)} className="w-full sm:w-auto" title="Update Loan">
+                        <Edit className="h-4 w-4 text-blue-500" />
+                      </Button>
+
+                      {/* Status selector */}
+                      <Select value={loan.status} onValueChange={(value) => openUpdateModal(loan, value)}>
+                        <SelectTrigger className="w-[140px] text-sm border-gray-200">
+                          <SelectValue />
                         </SelectTrigger>
+
                         <SelectContent>
-                          {/* Replace with real officers from API */}
-                          <SelectItem value="2">Officer John</SelectItem>
-                          <SelectItem value="3">Officer Jane</SelectItem>
+                          <SelectItem value="pending" disabled={loan.status !== "pending"}>
+                            Pending
+                          </SelectItem>
+                          <SelectItem value="approved" disabled={loan.status !== "pending"}>
+                            Approved
+                          </SelectItem>
+                          <SelectItem value="rejected" disabled={loan.status !== "pending"}>
+                            Rejected
+                          </SelectItem>
+                          <SelectItem value="active" disabled={loan.status !== "approved"}>
+                            Active
+                          </SelectItem>
+                          <SelectItem value="completed" disabled={loan.status !== "active"}>
+                            Completed
+                          </SelectItem>
+                          <SelectItem value="defaulted" disabled={loan.status !== "completed"}>
+                            Defaulted
+                          </SelectItem>
                         </SelectContent>
                       </Select>
-
-                      {/* Approve */}
-                      <Button variant="default" disabled={!loanOfficerMap[loan.id]} onClick={() => approveLoan(loan.id)}>
-                        <Check className="h-4 w-4 mr-1" />
-                        Approve
-                      </Button>
-
-                      {/* Reject */}
-                      <Button variant="destructive" onClick={() => rejectLoan(loan.id)}>
-                        <X className="h-4 w-4 mr-1" />
-                        Reject
-                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -452,7 +519,7 @@ export default function LenderLoansPage() {
         </main>
       </div>
 
-      {/* REDESIGNED Loan Details Modal - Compact, Scannable, Better Typography */}
+      {/* Loan Details Modal */}
       <Dialog open={showLoanModal} onOpenChange={setShowLoanModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
           {selectedLoan && (
@@ -590,7 +657,7 @@ export default function LenderLoansPage() {
                   </div>
                 </div>
 
-                {/* Documents - Compact List */}
+                {/* Documents */}
                 {selectedLoan.documents && selectedLoan.documents.length > 0 && (
                   <div className="bg-slate-50 rounded-lg p-4 border">
                     <div className="flex items-center gap-2 mb-3">
@@ -639,6 +706,134 @@ export default function LenderLoansPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Modal */}
+      <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Loan #{selectedLoan?.id}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Status */}
+            <div>
+              <Label>Status</Label>
+
+              <Select value={status} onValueChange={(value) => setStatus(value)}>
+                <SelectTrigger className="w-[140px] text-sm border-gray-200">
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {/* Pending → can only stay pending */}
+                  <SelectItem value="pending" disabled={selectedLoan?.status !== "pending"}>
+                    Pending
+                  </SelectItem>
+
+                  {/* Pending → Approved */}
+                  <SelectItem value="approved" disabled={selectedLoan?.status !== "pending"}>
+                    Approved
+                  </SelectItem>
+
+                  {/* Pending → Rejected */}
+                  <SelectItem value="rejected" disabled={selectedLoan?.status !== "pending"}>
+                    Rejected
+                  </SelectItem>
+
+                  {/* Approved → Active */}
+                  <SelectItem value="active" disabled={selectedLoan?.status !== "approved"}>
+                    Active
+                  </SelectItem>
+
+                  {/* Active → Completed */}
+                  <SelectItem value="completed" disabled={selectedLoan?.status !== "active"}>
+                    Completed
+                  </SelectItem>
+
+                  {/* Completed → Defaulted */}
+                  <SelectItem value="defaulted" disabled={selectedLoan?.status !== "completed"}>
+                    Defaulted
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(() => {
+              // Determine what fields to show based on status
+              const isPending = status === "pending"
+              const isApproved = status === "approved"
+              const isRejected = status === "rejected"
+              const isActive = status === "active"
+              const isCompleted = status === "completed"
+              const isDefaulted = status === "defaulted"
+
+              return (
+                <>
+                  {/* Approved Amount & Interest Rate */}
+                  {(isPending || isApproved) && (
+                    <>
+                      <div>
+                        <Label>Approved Amount</Label>
+                        <Input type="number" value={approvedAmount} onChange={(e) => setApprovedAmount(e.target.value)} />
+                      </div>
+
+                      <div>
+                        <Label>Interest Rate (%)</Label>
+                        <Input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
+                      </div>
+
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Rejection Reason */}
+                  {isRejected && (
+                    <div>
+                      <Label>Rejection Reason</Label>
+                      <Textarea placeholder="Rejection Reason" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} />
+                    </div>
+                  )}
+
+                  {/* Activate fields */}
+                  {isActive && (
+                    <>
+                      <div className="space-y-1">
+                        <Label>Start Date</Label>
+                        <Input type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label>First Payment Date</Label>
+                        <Input type="date" value={activateFirstPaymentDate} onChange={(e) => setActivateFirstPaymentDate(e.target.value)} />
+                      </div>
+
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Completed or Defaulted loans: only Notes */}
+                  {(isCompleted || isDefaulted) && (
+                    <div>
+                      <Label>Notes</Label>
+                      <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            <Button className="w-full" onClick={handleUpdateLoan} disabled={updating}>
+              {updating ? "Updating..." : "Update Loan"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

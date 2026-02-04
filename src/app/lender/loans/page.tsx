@@ -56,6 +56,7 @@ interface Loan {
     email?: string
   }
   lender?: {
+    id: number
     first_name: string
     last_name: string
     email?: string
@@ -74,13 +75,6 @@ interface Loan {
   }>
 }
 
-interface Lender {
-  id: number
-  first_name: string
-  last_name: string
-  email?: string
-}
-
 export default function LenderLoansPage() {
   const router = useRouter()
   const { user, authenticated, loading: authLoading } = useAuth()
@@ -92,7 +86,6 @@ export default function LenderLoansPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null)
   const [showLoanModal, setShowLoanModal] = useState(false)
-  const [loadingLoan, setLoadingLoan] = useState(false)
 
   const [showActivateModal, setShowActivateModal] = useState(false)
   const [activating, setActivating] = useState(false)
@@ -106,15 +99,11 @@ export default function LenderLoansPage() {
 
   // Fields for the update modal
   const [status, setStatus] = useState<string>("")
-  const [approvedAmount, setApprovedAmount] = useState<string>("")
-  const [interestRate, setInterestRate] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
-  const [rejectionReason, setRejectionReason] = useState<string>("")
-  const [selectedLenderId, setSelectedLenderId] = useState<number | null>(null)
   const [updating, setUpdating] = useState(false)
 
-  // Example lenders list (replace with your actual API data)
-  const [lenders, setLenders] = useState<Lender[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10) // show 10 loans per page
 
   useEffect(() => {
     if (!authenticated && !authLoading) {
@@ -165,28 +154,6 @@ export default function LenderLoansPage() {
       setLoading(false)
     }
   }
-
-  // const fetchLoanDetails = async (loanId: number) => {
-  //   setLoadingLoan(true)
-  //   try {
-  //     const token = localStorage.getItem("token")
-  //     const response = await fetch(`/api/loans/${loanId}`, {
-  //       headers: { Authorization: `Bearer ${token}` },
-  //     })
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to fetch loan details")
-  //     }
-
-  //     const data = await response.json()
-  //     setSelectedLoan(data.loan)
-  //     setShowLoanModal(true)
-  //   } catch (err) {
-  //     alert(err instanceof Error ? err.message : "Failed to load loan details")
-  //   } finally {
-  //     setLoadingLoan(false)
-  //   }
-  // }
 
   const handleViewDetails = (loan: Loan, e?: React.MouseEvent) => {
     if (e) {
@@ -254,13 +221,13 @@ export default function LenderLoansPage() {
       setActivating(false)
     }
   }
+
   const handleOpenUpdateModal = (loan: Loan) => {
     setSelectedApp(loan)
     setStatus(loan.status)
-    setApprovedAmount(loan.approved_amount || "")
-    setInterestRate(loan.interest_rate || "")
+    setActivateStartDate(loan.start_date || "")
+    setActivateFirstPaymentDate(loan.first_payment_date || "")
     setNotes(loan.notes || "")
-    setRejectionReason(loan.rejection_reason || "")
     setSelectedLenderId(loan.lender?.id || null)
     setShowUpdateModal(true)
   }
@@ -270,13 +237,16 @@ export default function LenderLoansPage() {
     try {
       setUpdating(true)
       const token = localStorage.getItem("token")
-      const body = {
+
+      // Build request body based on current modal fields
+      const body: any = {
         status,
-        approved_amount: approvedAmount,
-        interest_rate: interestRate,
         notes,
-        rejection_reason: rejectionReason,
-        lender_id: selectedLenderId,
+      }
+
+      if (status === "active") {
+        body.start_date = toISODate(activateStartDate)
+        body.first_payment_date = toISODate(activateFirstPaymentDate)
       }
 
       const response = await fetch(`/api/loans/${selectedApp.id}`, {
@@ -291,11 +261,14 @@ export default function LenderLoansPage() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || "Failed to update loan")
 
-      // Update the local loan list
+      // Update local loans state
       setLoans((prev) => prev.map((l) => (l.id === selectedApp.id ? { ...l, ...data.loan } : l)))
 
       setShowUpdateModal(false)
       setSelectedApp(null)
+      setActivateStartDate("")
+      setActivateFirstPaymentDate("")
+      setNotes("")
     } catch (err) {
       alert(err instanceof Error ? err.message : "Update failed")
     } finally {
@@ -349,6 +322,9 @@ export default function LenderLoansPage() {
       })
     : []
 
+  const totalPages = Math.ceil(filteredLoans.length / itemsPerPage)
+  const paginatedLoans = filteredLoans.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
   const stats = {
     total: loans.length,
     pending: loans.filter((l) => l?.status === "pending").length,
@@ -363,6 +339,16 @@ export default function LenderLoansPage() {
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
+  }
+
+  const formatDateForInput = (dateString?: string) => {
+    if (!dateString) return ""
+    return dateString.split("T")[0] // Take only YYYY-MM-DD
+  }
+
+  const toISODate = (dateString: string) => {
+    if (!dateString) return null
+    return new Date(dateString).toISOString()
   }
 
   return (
@@ -489,7 +475,7 @@ export default function LenderLoansPage() {
 
           {/* Loans List */}
           <div className="space-y-4">
-            {filteredLoans.length === 0 ? (
+            {paginatedLoans.length === 0 ? (
               <Card className="p-8">
                 <div className="text-center">
                   <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -502,7 +488,7 @@ export default function LenderLoansPage() {
                 </div>
               </Card>
             ) : (
-              filteredLoans.map((loan) => (
+              paginatedLoans.map((loan) => (
                 <Card key={loan.id} className="p-4 sm:p-6 hover:shadow-md transition-shadow">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-3 flex-1 min-w-0">
@@ -529,7 +515,10 @@ export default function LenderLoansPage() {
                           <div>
                             <p className="text-muted-foreground text-xs">Amount</p>
                             <p className="font-medium">
-                              ₱{loan.amount ? parseFloat(loan.amount).toLocaleString("en-US", { minimumFractionDigits: 2 }) : "0.00"}
+                              ₱
+                              {loan.principal_amount
+                                ? parseFloat(loan.principal_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })
+                                : "0.00"}
                             </p>
                           </div>
                         </div>
@@ -589,7 +578,7 @@ export default function LenderLoansPage() {
                         </Button>
                       </>
                     )}
-                    {loan.status === "active" && (
+                    {(loan.status === "active" || loan.status === "completed" || loan.status === "defaulted") && (
                       <Button
                         variant="outline"
                         onClick={() => handleOpenUpdateModal(loan)}
@@ -603,6 +592,24 @@ export default function LenderLoansPage() {
                   </div>
                 </Card>
               ))
+            )}
+            {filteredLoans.length > itemsPerPage && (
+              <div className="flex justify-center items-center gap-2 mt-4">
+                <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}>
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                >
+                  Next
+                </Button>
+              </div>
             )}
           </div>
         </main>
@@ -956,12 +963,16 @@ export default function LenderLoansPage() {
                     <>
                       <div className="space-y-1">
                         <Label>Start Date</Label>
-                        <Input type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
+                        <Input type="date" value={formatDateForInput(activateStartDate)} onChange={(e) => setActivateStartDate(e.target.value)} />
                       </div>
 
                       <div className="space-y-1">
                         <Label>First Payment Date</Label>
-                        <Input type="date" value={activateFirstPaymentDate} onChange={(e) => setActivateFirstPaymentDate(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={formatDateForInput(activateFirstPaymentDate)}
+                          onChange={(e) => setActivateFirstPaymentDate(e.target.value)}
+                        />
                       </div>
 
                       <div>
