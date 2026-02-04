@@ -27,7 +27,10 @@ import {
   Mail,
   CreditCard,
   CheckCheckIcon,
+  Edit,
 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Loan {
   id: number
@@ -96,6 +99,22 @@ export default function LenderLoansPage() {
   const [activateStartDate, setActivateStartDate] = useState("")
   const [activateFirstPaymentDate, setActivateFirstPaymentDate] = useState("")
   const [loanToActivate, setLoanToActivate] = useState<Loan | null>(null)
+
+  // Add these state hooks at the top of your component:
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [selectedApp, setSelectedApp] = useState<Loan | null>(null)
+
+  // Fields for the update modal
+  const [status, setStatus] = useState<string>("")
+  const [approvedAmount, setApprovedAmount] = useState<string>("")
+  const [interestRate, setInterestRate] = useState<string>("")
+  const [notes, setNotes] = useState<string>("")
+  const [rejectionReason, setRejectionReason] = useState<string>("")
+  const [selectedLenderId, setSelectedLenderId] = useState<number | null>(null)
+  const [updating, setUpdating] = useState(false)
+
+  // Example lenders list (replace with your actual API data)
+  const [lenders, setLenders] = useState<Lender[]>([])
 
   useEffect(() => {
     if (!authenticated && !authLoading) {
@@ -233,6 +252,54 @@ export default function LenderLoansPage() {
       alert(err instanceof Error ? err.message : "Activation failed")
     } finally {
       setActivating(false)
+    }
+  }
+  const handleOpenUpdateModal = (loan: Loan) => {
+    setSelectedApp(loan)
+    setStatus(loan.status)
+    setApprovedAmount(loan.approved_amount || "")
+    setInterestRate(loan.interest_rate || "")
+    setNotes(loan.notes || "")
+    setRejectionReason(loan.rejection_reason || "")
+    setSelectedLenderId(loan.lender?.id || null)
+    setShowUpdateModal(true)
+  }
+
+  const handleUpdateLoan = async () => {
+    if (!selectedApp) return
+    try {
+      setUpdating(true)
+      const token = localStorage.getItem("token")
+      const body = {
+        status,
+        approved_amount: approvedAmount,
+        interest_rate: interestRate,
+        notes,
+        rejection_reason: rejectionReason,
+        lender_id: selectedLenderId,
+      }
+
+      const response = await fetch(`/api/loans/${selectedApp.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || "Failed to update loan")
+
+      // Update the local loan list
+      setLoans((prev) => prev.map((l) => (l.id === selectedApp.id ? { ...l, ...data.loan } : l)))
+
+      setShowUpdateModal(false)
+      setSelectedApp(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed")
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -501,14 +568,36 @@ export default function LenderLoansPage() {
                       <Eye className="h-4 w-4" />
                     </Button>
                     {loan?.status === "approved" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={(e) => handleActivateClick(loan, e)}
+                          className="w-full sm:w-auto flex-shrink-0"
+                          type="button"
+                          title="Activate"
+                        >
+                          <CheckCheckIcon className="h-4 w-4 text-green-500" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleOpenUpdateModal(loan)}
+                          className="w-full sm:w-auto flex-shrink-0"
+                          type="button"
+                          title="Update Loan"
+                        >
+                          <Edit className="h-4 w-4 text-blue-500" />
+                        </Button>
+                      </>
+                    )}
+                    {loan.status === "active" && (
                       <Button
                         variant="outline"
-                        onClick={(e) => handleActivateClick(loan, e)}
+                        onClick={() => handleOpenUpdateModal(loan)}
                         className="w-full sm:w-auto flex-shrink-0"
                         type="button"
-                        title="Activate"
+                        title="Update Loan"
                       >
-                        <CheckCheckIcon className="h-4 w-4 text-blue-500" />
+                        <Edit className="h-4 w-4 text-blue-500" />
                       </Button>
                     )}
                   </div>
@@ -824,6 +913,77 @@ export default function LenderLoansPage() {
           <div className="flex justify-end mt-4">
             <Button variant="ghost" onClick={() => setShowActivateModal(false)}>
               Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* update */}
+      <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Loan #{selectedApp?.id}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Status is always visible */}
+            <div>
+              <Label>Status</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {["active", "completed", "defaulted"].map((s) => (
+                    <SelectItem key={s} value={s} disabled={selectedApp?.status === "approved" && (s === "completed" || s === "defaulted")}>
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(() => {
+              // Determine what fields to show based on status
+              const isActive = status === "active"
+              const isCompleted = status === "completed"
+              const isDefaulted = status === "defaulted"
+
+              return (
+                <>
+                  {/* Activate fields */}
+                  {isActive && (
+                    <>
+                      <div className="space-y-1">
+                        <Label>Start Date</Label>
+                        <Input type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label>First Payment Date</Label>
+                        <Input type="date" value={activateFirstPaymentDate} onChange={(e) => setActivateFirstPaymentDate(e.target.value)} />
+                      </div>
+
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Completed or Defaulted loans: only Notes */}
+                  {(isCompleted || isDefaulted) && (
+                    <div>
+                      <Label>Notes</Label>
+                      <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            <Button className="w-full" onClick={handleUpdateLoan} disabled={updating}>
+              {updating ? "Updating..." : "Update Loan"}
             </Button>
           </div>
         </DialogContent>

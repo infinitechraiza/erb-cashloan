@@ -235,6 +235,7 @@ export default function ApplicationsPage() {
                 setNotes(loan.notes ?? "")
                 setRejectionReason(loan.rejection_reason ?? "")
                 setShowUpdateModal(true)
+                setSelectedLenderId(loan.lender?.id ?? null)
               }}
             >
               <Edit2 className="h-4 w-4 text-green-500" />
@@ -491,18 +492,33 @@ export default function ApplicationsPage() {
 
       const payload: Record<string, any> = {}
 
+      // Always include status if changed
       if (status && status !== selectedApp.status) payload.status = status
 
-      if (approvedAmount !== "") payload.approved_amount = Number(approvedAmount)
+      // Pending / Approved: status, assign lender, approved amount, interest rate, notes
+      if (status === "pending" || status === "approved") {
+        if (approvedAmount !== "") payload.approved_amount = Number(approvedAmount)
+        if (interestRate !== "") payload.interest_rate = Number(interestRate)
+        if (notes !== "") payload.notes = notes
+        if (user?.role === "admin" && selectedLenderId) payload.lender_id = selectedLenderId
+      }
 
-      if (interestRate !== "") payload.interest_rate = Number(interestRate)
+      // Rejected: status, rejection reason only
+      if (status === "rejected") {
+        if (rejectionReason !== "") payload.rejection_reason = rejectionReason
+      }
 
-      if (notes !== "") payload.notes = notes
+      // Active: status, assign lender, start date, first payment, notes
+      if (status === "active") {
+        if (user?.role === "admin" && selectedLenderId) payload.lender_id = selectedLenderId
+        if (activateStartDate) payload.start_date = activateStartDate
+        if (activateFirstPaymentDate) payload.first_payment_date = activateFirstPaymentDate
+        if (notes !== "") payload.notes = notes
+      }
 
-      if (status === "rejected" && rejectionReason !== "") payload.rejection_reason = rejectionReason
-      // Assign lender if admin and selected
-      if (user?.role === "admin" && selectedLenderId) {
-        payload.lender_id = selectedLenderId
+      // Completed / Defaulted: status, notes only
+      if (status === "completed" || status === "defaulted") {
+        if (notes !== "") payload.notes = notes
       }
 
       const res = await fetch(`/api/loans/${selectedApp.id}`, {
@@ -651,6 +667,9 @@ export default function ApplicationsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  This is optional. If left unassigned, a lender may assign the loan to themselves later.
+                </p>
               </div>
             )}
 
@@ -720,7 +739,7 @@ export default function ApplicationsPage() {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Status */}
+              {/* Status is always visible */}
               <div>
                 <Label>Status</Label>
                 <Select value={status} onValueChange={setStatus}>
@@ -737,45 +756,94 @@ export default function ApplicationsPage() {
                 </Select>
               </div>
 
-              {/* Lender Assignment (Admin only) */}
-              {user?.role === "admin" && (
-                <div className="space-y-1">
-                  <Label>Assign Lender</Label>
-                  <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Lender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {lenders.map((lender) => (
-                        <SelectItem key={lender.id} value={lender.id.toString()}>
-                          {lender.first_name} {lender.last_name} ({lender.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    This is optional. If left unassigned, a lender may assign the loan to themselves later.
-                  </p>
-                </div>
-              )}
+              {(() => {
+                // Determine what fields to show based on status
+                const isPendingOrApproved = status === "pending" || status === "approved"
+                const isRejected = status === "rejected"
+                const isActive = status === "active"
+                const isCompleted = status === "completed"
+                const isDefaulted = status === "defaulted"
 
-              {/* Approved Amount */}
-              <div>
-                <Label>Approved Amount</Label>
-                <Input type="number" value={approvedAmount} onChange={(e) => setApprovedAmount(e.target.value)} />
-              </div>
+                return (
+                  <>
+                    {/* Lender Assignment (Admin only) */}
+                    {user?.role === "admin" && (isPendingOrApproved || isActive) && (
+                      <div className="space-y-1">
+                        <Label>Assign Lender</Label>
+                        <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Lender" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lenders.map((lender) => (
+                              <SelectItem key={lender.id} value={lender.id.toString()}>
+                                {lender.first_name} {lender.last_name} ({lender.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Optional. If unassigned, a lender may assign the loan to themselves later.</p>
+                      </div>
+                    )}
 
-              {/* Interest Rate */}
-              <div>
-                <Label>Interest Rate (%)</Label>
-                <Input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
-              </div>
+                    {/* Approved Amount & Interest Rate */}
+                    {isPendingOrApproved && (
+                      <>
+                        <div>
+                          <Label>Approved Amount</Label>
+                          <Input type="number" value={approvedAmount} onChange={(e) => setApprovedAmount(e.target.value)} />
+                        </div>
 
-              {/* Notes */}
-              <div>
-                <Label>Notes</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
+                        <div>
+                          <Label>Interest Rate (%)</Label>
+                          <Input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
+                        </div>
+
+                        <div>
+                          <Label>Notes</Label>
+                          <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Rejection Reason */}
+                    {isRejected && (
+                      <div>
+                        <Label>Rejection Reason</Label>
+                        <Textarea placeholder="Rejection Reason" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} />
+                      </div>
+                    )}
+
+                    {/* Activate fields */}
+                    {isActive && (
+                      <>
+                        <div className="space-y-1">
+                          <Label>Start Date</Label>
+                          <Input type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label>First Payment Date</Label>
+                          <Input type="date" value={activateFirstPaymentDate} onChange={(e) => setActivateFirstPaymentDate(e.target.value)} />
+                        </div>
+
+                        <div>
+                          <Label>Notes</Label>
+                          <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Completed or Defaulted loans: only Notes */}
+                    {(isCompleted || isDefaulted) && (
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
               <Button className="w-full" onClick={handleUpdateLoan} disabled={updating}>
                 {updating ? "Updating..." : "Update Loan"}
