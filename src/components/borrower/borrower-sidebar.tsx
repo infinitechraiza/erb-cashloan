@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { DollarSign, TrendingUp, FileText, Menu, X, User } from 'lucide-react';
+import { DollarSign, TrendingUp, FileText, Menu, X, User, FileSearchCorner } from 'lucide-react';
 import { useAuth } from '@/components/auth-context';
 
 export function BorrowerSidebar() {
@@ -21,7 +21,7 @@ export function BorrowerSidebar() {
     { href: '/dashboard', label: 'Dashboard', icon: FileText },
     { href: '/dashboard/loans', label: 'Loans', icon: DollarSign },
     { href: '/dashboard/payments', label: 'Payments', icon: TrendingUp },
-    { href: '/dashboard/profile', label: 'Profile', icon: User },
+    { href: '/dashboard/documents', label: 'Documents', icon: FileSearchCorner },
   ];
 
   const isActive = (href: string) => pathname === href;
