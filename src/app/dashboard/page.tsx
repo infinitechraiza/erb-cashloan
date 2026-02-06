@@ -7,11 +7,8 @@ import AdminDashboard from "./admin/page"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 // import { LenderSidebar } from "@/components/lender/lender-sidebar"
-import {
-  DollarSign,
-  TrendingUp,
-  FileText,
-} from "lucide-react"
+import { DollarSign, TrendingUp, FileText } from "lucide-react"
+import LenderDashboardPage from "../lender/page"
 
 // function StatCard({ title, value, icon }: any) {
 //   return (
@@ -35,8 +32,8 @@ export default function DashboardPage() {
     switch (user?.role) {
       case "admin":
         return <AdminDashboard />
-      // case "lender":
-      //   return <LenderDashboard onLogout={handleLogout} user={user} />
+      case "lender":
+        return <LenderDashboardPage />
       case "borrower":
         return <BorrowerDashboard />
       default:
