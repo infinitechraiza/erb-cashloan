@@ -4,12 +4,14 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Eye } from "lucide-react"
+import { AlertCircle, CheckCircle, Download, Eye, XCircle } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/paginated-data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { LenderSidebar } from "@/components/lender/lender-sidebar"
+import { toast } from "sonner"
+import Image from "next/image"
 
 interface Loan {
   id: number
@@ -70,7 +72,7 @@ interface Payment {
   created_at: string
 }
 
-export default function AdminPaymentsPage() {
+export default function LenderPaymentsPage() {
   const router = useRouter()
   const { authenticated, loading: authLoading } = useAuth()
   const requestIdRef = useRef(0)
@@ -99,6 +101,11 @@ export default function AdminPaymentsPage() {
 
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
   const [viewPaymentOpen, setViewPaymentOpen] = useState(false)
+  const [verifyPaymentOpen, setVerifyPaymentOpen] = useState(false)
+  const [verifyActionLoading, setVerifyActionLoading] = useState(false)
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
+  const [rejectReasonOpen, setRejectReasonOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
 
   // Debounce search
   useEffect(() => {
@@ -167,6 +174,76 @@ export default function AdminPaymentsPage() {
     if (authenticated) fetchPayments()
   }, [authenticated, authLoading, debouncedSearch, filterType, pagination.pageIndex, pagination.pageSize, sorting.column, sorting.order])
 
+  const handleVerifyPayment = async (action: "approve" | "reject", reason?: string) => {
+    if (!selectedPayment) return
+    setVerifyActionLoading(true)
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch(`/api/payments/${selectedPayment.id}/verify`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason: action === "reject" ? reason : undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "Failed to verify payment")
+      // Close modal BEFORE fetching new data to prevent re-opening
+      setVerifyPaymentOpen(false)
+      setSelectedPayment(null)
+      fetchPayments()
+      setVerifyPaymentOpen(false)
+      setViewPaymentOpen(false)
+      toast.success(`Payment ${action === "approve" ? "approved" : "rejected"} successfully`)
+    } catch (err) {
+      console.error(err)
+      alert(err instanceof Error ? err.message : "Failed to verify")
+    } finally {
+      setVerifyActionLoading(false)
+    }
+  }
+
+  // Inside your component
+  const downloadFile = async (paymentId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      if (!paymentId) throw new Error("Invalid payment ID")
+      if (!token) throw new Error("Unauthorized")
+        
+      // Proxy URL in Next.js
+      const proxyUrl = `/api/payments/${paymentId}/proof/download`
+
+      const res = await fetch(proxyUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`, // include the token here
+        },
+      })
+      if (!res.ok) throw new Error("Failed to fetch file")
+
+      const blob = await res.blob()
+
+      // Extract filename from content-disposition header if present
+      const disposition = res.headers.get("content-disposition")
+      let fileName = "proof.png"
+
+      if (disposition?.includes("filename=")) {
+        const match = disposition.match(/filename="?(.+)"?/)
+        if (match && match[1]) fileName = match[1]
+      }
+
+      // Create temporary link to trigger download
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(blob)
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      toast.success("File downloaded successfully")
+    } catch (err) {
+      console.error("Download failed", err)
+      toast.error((err as Error).message || "Failed to download file")
+    }
+  }
+
   const columns = useMemo<ColumnDef<Payment>[]>(
     () => [
       { accessorKey: "id", header: "ID" },
@@ -199,34 +276,49 @@ export default function AdminPaymentsPage() {
         accessorKey: "status",
         header: "Status",
         cell: (v) => {
-          const s = (v.getValue() as string)?.toLowerCase()
+          const rawStatus = (v.getValue() as string)?.toLowerCase()
+
+          // Map to human-readable label
+          const statusLabels: Record<string, string> = {
+            paid: "Paid",
+            pending: "Pending",
+            late: "Late",
+            missed: "Missed",
+            awaiting_verification: "Awaiting Verification",
+            rejected: "Rejected",
+          }
 
           const statusStyles: Record<string, string> = {
             paid: "bg-green-100 text-green-800",
             pending: "bg-yellow-100 text-yellow-800",
             late: "bg-orange-100 text-orange-800",
             missed: "bg-red-100 text-red-800",
+            awaiting_verification: "bg-yellow-200 text-yellow-800",
+            rejected: "bg-red-100 text-red-800",
           }
 
-          const cls = statusStyles[s] || "bg-gray-100 text-gray-800"
+          const label = statusLabels[rawStatus] ?? rawStatus
+          const cls = statusStyles[rawStatus] ?? "bg-gray-100 text-gray-800"
 
-          return <Badge className={`${cls} capitalize px-2 py-1 rounded-full text-xs`}>{s}</Badge>
+          return <Badge className={`${cls} px-2 py-1 rounded-full text-xs`}>{label}</Badge>
         },
       },
       {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSelectedPayment(row.original)
-              setViewPaymentOpen(true)
-            }}
-          >
-            <Eye className="h-4 w-4 text-blue-500" />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedPayment(row.original)
+                setViewPaymentOpen(true)
+              }}
+            >
+              <Eye className="h-4 w-4 text-blue-500" />
+            </Button>
+          </>
         ),
       },
     ],
@@ -237,6 +329,7 @@ export default function AdminPaymentsPage() {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
+  console.log(payments)
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -257,17 +350,29 @@ export default function AdminPaymentsPage() {
           {/* Filters */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex gap-2 flex-wrap">
-              {["all", "upcoming", "overdue", "paid"].map((t) => (
-                <Button
-                  key={t}
-                  size="sm"
-                  variant={filterType === t ? "default" : "outline"}
-                  className="capitalize"
-                  onClick={() => setFilterType(t as any)}
-                >
-                  {t}
-                </Button>
-              ))}
+              {["all", "upcoming", "overdue", "awaiting_verification", "rejected", "paid"].map((t) => {
+                // Map to human-readable label
+                const labelMap: Record<string, string> = {
+                  all: "All",
+                  upcoming: "Upcoming",
+                  overdue: "Overdue",
+                  awaiting_verification: "Awaiting Verification",
+                  rejected: "Rejected",
+                  paid: "Paid",
+                }
+
+                return (
+                  <Button
+                    key={t}
+                    size="sm"
+                    variant={filterType === t ? "default" : "outline"}
+                    className="capitalize"
+                    onClick={() => setFilterType(t as any)}
+                  >
+                    {labelMap[t] ?? t}
+                  </Button>
+                )
+              })}
             </div>
             {fetching && <span className="text-xs text-muted-foreground">Updating results…</span>}
           </div>
@@ -309,7 +414,7 @@ export default function AdminPaymentsPage() {
         </main>
       </div>
 
-      {/* View Payment Dialog */}
+      {/* Verify Payment Dialog */}
       <Dialog open={viewPaymentOpen} onOpenChange={setViewPaymentOpen}>
         <DialogContent className="h-[90vh] max-w-md overflow-y-auto">
           <DialogHeader>
@@ -424,6 +529,34 @@ export default function AdminPaymentsPage() {
             </div>
           </div>
 
+          {/* Proof of Payment */}
+          {selectedPayment?.proof_of_payment && (
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-500 mb-2">Proof of Payment</h4>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="font-medium">{selectedPayment.proof_of_payment.split("/").pop()}</p>
+                    <p className="text-sm text-muted-foreground">Proof of Payment</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => downloadFile(selectedPayment.id)}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+            <div>
+              <p className="text-gray-600">Verified At</p>
+              <p className="font-medium">{selectedPayment?.verified_at ? new Date(selectedPayment.verified_at).toLocaleString() : "-"}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-gray-600">Rejection Reason</p>
+              <p className="font-medium">{selectedPayment?.rejection_reason ?? "-"}</p>
+            </div>
+          </div>
           {/* Record */}
           <div className="border rounded-md p-4 bg-gray-50 text-sm">
             <p>
@@ -434,6 +567,72 @@ export default function AdminPaymentsPage() {
               <span className="text-gray-600">Updated: </span>
               <span className="font-medium">{new Date(selectedPayment?.updated_at).toLocaleString()}</span>
             </p>
+          </div>
+          {selectedPayment?.status === "awaiting_verification" && (
+            <div className="flex flex-col gap-3 mt-4">
+              <Button variant="default" onClick={() => setApproveConfirmOpen(true)} disabled={verifyActionLoading}>
+                <CheckCircle className="mr-2 h-4 w-4" /> Approve
+              </Button>
+              <Button variant="destructive" onClick={() => setRejectReasonOpen(true)} disabled={verifyActionLoading}>
+                <XCircle className="mr-2 h-4 w-4" /> Reject
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={approveConfirmOpen} onOpenChange={setApproveConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm Approval</DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to approve this payment?</p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setApproveConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setApproveConfirmOpen(false)
+                handleVerifyPayment("approve")
+              }}
+              disabled={verifyActionLoading}
+            >
+              {verifyActionLoading ? "Processing..." : "Approve"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejectReasonOpen} onOpenChange={setRejectReasonOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reject Payment</DialogTitle>
+          </DialogHeader>
+          <p>Please provide a reason for rejecting this payment:</p>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            className="w-full mt-2 p-2 border rounded resize-none"
+            rows={3}
+            placeholder="Enter rejection reason..."
+          />
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setRejectReasonOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setRejectReasonOpen(false)
+                handleVerifyPayment("reject", rejectReason)
+                setRejectReason("") // clear after submit
+              }}
+              disabled={verifyActionLoading || !rejectReason.trim()}
+            >
+              {verifyActionLoading ? "Processing..." : "Reject"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
