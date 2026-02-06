@@ -20,6 +20,7 @@ interface Payment {
   paid_at?: string
   created_at: string
   updated_at: string
+  proof_of_payment?: string
 }
 
 interface Loan {
@@ -38,7 +39,15 @@ interface Loan {
   outstanding_balance?: string
   created_at: string
   updated_at: string
+  approved_at?: string
   payments?: Payment[]
+  documents?: Array<{
+    id: number
+    name?: string
+    file_name?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any
+  }>
 }
 
 interface Borrower {
@@ -88,7 +97,11 @@ export default function BorrowerPage() {
     fetchBorrower()
   }, [id, router])
 
-  const downloadDocument = async (id: number, docId: number, fileName?: string) => {
+  const downloadDocument = async (
+    id: number,
+    docId: number,
+    fileName?: string,
+  ) => {
     setDownloading(docId)
     try {
       const token = localStorage.getItem("token")
@@ -175,10 +188,24 @@ export default function BorrowerPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Loading...
+      </div>
+    )
   }
 
   if (!borrower) return null
+
+  const Info: React.FC<{ label: string; value: string | number }> = ({
+    label,
+    value,
+  }) => (
+    <div>
+      <p className="text-muted-foreground">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
+  )
 
   return (
     <div className="flex min-h-screen">
@@ -191,8 +218,12 @@ export default function BorrowerPage() {
         <header className="border-b border-border bg-card sticky top-0 z-10">
           <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
-              <h1 className="text-3xl font-bold text-primary">Borrowers Details</h1>
-              <p className="text-sm text-muted-foreground mt-1">Borrower loans and payments details</p>
+              <h1 className="text-3xl font-bold text-primary">
+                Borrowers Details
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Borrower loans and payments details
+              </p>
             </div>
           </div>
         </header>
@@ -229,64 +260,121 @@ export default function BorrowerPage() {
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
             </TabsList>
 
-           
-
             {/*  LOANS  */}
             <TabsContent value="loans" className="space-y-4">
               {borrower.loans?.length ? (
                 borrower.loans.map((loan) => (
-                  <Card key={loan.id} className="p-5 space-y-4 border hover:shadow-sm transition-shadow">
+                  <Card
+                    key={loan.id}
+                    className="p-5 space-y-4 border hover:shadow-sm transition-shadow"
+                  >
                     {/* Loan Header */}
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="font-semibold">Loan #{loan.id}</p>
                         <p className="text-sm text-muted-foreground">
-                          {loan.type} — ₱{Number(loan.principal_amount).toLocaleString()}
+                          {loan.type} — ₱
+                          {Number(loan.principal_amount).toLocaleString()}
                         </p>
                       </div>
-                      <Badge className={statusColors[loan.status]}>{loan.status}</Badge>
+                      <Badge className={statusColors[loan.status]}>
+                        {loan.status}
+                      </Badge>
                     </div>
                     {/* Loan Details */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                      <Info label="Approved Amount" value={loan.approved_amount ? `₱${Number(loan.approved_amount).toLocaleString()}` : "-"} />
+                      <Info
+                        label="Approved Amount"
+                        value={
+                          loan.approved_amount
+                            ? `₱${Number(loan.approved_amount).toLocaleString()}`
+                            : "-"
+                        }
+                      />
                       <Info
                         label="Outstanding Balance"
-                        value={loan.outstanding_balance ? `₱${Number(loan.outstanding_balance).toLocaleString()}` : "-"}
+                        value={
+                          loan.outstanding_balance
+                            ? `₱${Number(loan.outstanding_balance).toLocaleString()}`
+                            : "-"
+                        }
                       />
-                      <Info label="Interest Rate" value={`${loan.interest_rate}%`} />
-                      <Info label="Term" value={`${loan.term_months ?? "-"} months`} />
-                      <Info label="Start Date" value={loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "-"} />
+                      <Info
+                        label="Interest Rate"
+                        value={`${loan.interest_rate}%`}
+                      />
+                      <Info
+                        label="Term"
+                        value={`${loan.term_months ?? "-"} months`}
+                      />
+                      <Info
+                        label="Start Date"
+                        value={
+                          loan.start_date
+                            ? new Date(loan.start_date).toLocaleDateString()
+                            : "-"
+                        }
+                      />
                       <Info
                         label="First Payment Date"
-                        value={loan.first_payment_date ? new Date(loan.first_payment_date).toLocaleDateString() : "-"}
+                        value={
+                          loan.first_payment_date
+                            ? new Date(
+                                loan.first_payment_date,
+                              ).toLocaleDateString()
+                            : "-"
+                        }
                       />
                     </div>
                     {/* Notes / Rejection */}
                     {(loan.notes || loan.rejection_reason) && (
                       <div className="text-sm space-y-1">
-                        {loan.notes && <p className="text-muted-foreground">Notes: {loan.notes}</p>}
-                        {loan.rejection_reason && <p className="text-red-600">Rejection Reason: {loan.rejection_reason}</p>}
+                        {loan.notes && (
+                          <p className="text-muted-foreground">
+                            Notes: {loan.notes}
+                          </p>
+                        )}
+                        {loan.rejection_reason && (
+                          <p className="text-red-600">
+                            Rejection Reason: {loan.rejection_reason}
+                          </p>
+                        )}
                       </div>
                     )}
                     {/* Documents */}
-                    {loan.documents?.length > 0 ? (
+                    {loan.documents && loan.documents?.length > 0 ? (
                       <Card className="p-6 space-y-4 gap-0">
                         <h2 className="text-lg font-semibold">Documents</h2>
 
                         {loan.documents.map((doc) => (
-                          <div key={doc.id} className="flex items-center justify-between border rounded-lg p-3">
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between border rounded-lg p-3"
+                          >
                             <div className="flex items-center gap-3">
                               <FileText className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-medium">{doc.name || doc.file_name}</span>
+                              <span className="text-sm font-medium">
+                                {doc.name || doc.file_name}
+                              </span>
                             </div>
 
                             <Button
                               size="sm"
                               variant="outline"
                               disabled={downloading === doc.id}
-                              onClick={() => downloadDocument(doc.loan_id, doc.id, doc.file_name)}
+                              onClick={() =>
+                                downloadDocument(
+                                  doc.loan_id,
+                                  doc.id,
+                                  doc.file_name,
+                                )
+                              }
                             >
-                              {downloading === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                              {downloading === doc.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
                             </Button>
                           </div>
                         ))}
@@ -294,13 +382,17 @@ export default function BorrowerPage() {
                     ) : (
                       <div className="pt-3 border-t text-sm">
                         <p className="font-medium mb-2">Documents</p>
-                        <p className="text-muted-foreground">No documents uploaded</p>
+                        <p className="text-muted-foreground">
+                          No documents uploaded
+                        </p>
                       </div>
                     )}
                   </Card>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">This borrower has no loans yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  This borrower has no loans yet.
+                </p>
               )}
             </TabsContent>
 
@@ -311,33 +403,61 @@ export default function BorrowerPage() {
                   loan.payments?.map((payment) => {
                     const status = payment.status || "-"
                     const label = statusLabels[status] || status
-                    const style = statusStyles[status] || "bg-gray-100 text-gray-800"
+                    const style =
+                      statusStyles[status] || "bg-gray-100 text-gray-800"
 
                     return (
                       <Card key={payment.id} className="p-5 space-y-4">
                         <div className="flex justify-between items-center">
-                          <p className="font-semibold">Payment — Loan #{loan.id}</p>
+                          <p className="font-semibold">
+                            Payment — Loan #{loan.id}
+                          </p>
                           <Badge className={style}>{label}</Badge>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <Info label="Transaction ID" value={payment.transaction_id} />
-                          <Info label="Amount" value={`₱${Number(payment.amount).toLocaleString()}`} />
-                          <Info label="Due Date" value={payment.due_date ? new Date(payment.due_date).toLocaleDateString() : "-"} />
+                          <Info
+                            label="Transaction ID"
+                            value={payment.transaction_id}
+                          />
+                          <Info
+                            label="Amount"
+                            value={`₱${Number(payment.amount).toLocaleString()}`}
+                          />
+                          <Info
+                            label="Due Date"
+                            value={
+                              payment.due_date
+                                ? new Date(
+                                    payment.due_date,
+                                  ).toLocaleDateString()
+                                : "-"
+                            }
+                          />
                         </div>
 
                         {/* Proof of Payment */}
                         {payment?.proof_of_payment ? (
                           <div className="mb-4">
-                            <h4 className="text-sm font-semibold text-gray-500 mb-2">Proof of Payment</h4>
+                            <h4 className="text-sm font-semibold text-gray-500 mb-2">
+                              Proof of Payment
+                            </h4>
                             <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                               <div className="flex items-center gap-3">
                                 <div>
-                                  <p className="font-medium">{payment.proof_of_payment.split("/").pop()}</p>
-                                  <p className="text-sm text-muted-foreground">Proof of Payment</p>
+                                  <p className="font-medium">
+                                    {payment.proof_of_payment.split("/").pop()}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Proof of Payment
+                                  </p>
                                 </div>
                               </div>
-                              <Button variant="ghost" size="sm" onClick={() => downloadFile(payment.id)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => downloadFile(String(payment.id))}
+                              >
                                 <Download className="h-4 w-4" />
                               </Button>
                             </div>
@@ -345,7 +465,9 @@ export default function BorrowerPage() {
                         ) : (
                           <div className="pt-3 border-t text-sm">
                             <p className="font-medium mb-1">Proof of Payment</p>
-                            <p className="text-muted-foreground">No proof uploaded</p>
+                            <p className="text-muted-foreground">
+                              No proof uploaded
+                            </p>
                           </div>
                         )}
                       </Card>
@@ -353,7 +475,9 @@ export default function BorrowerPage() {
                   }),
                 )
               ) : (
-                <p className="text-sm text-muted-foreground">No payments recorded.</p>
+                <p className="text-sm text-muted-foreground">
+                  No payments recorded.
+                </p>
               )}
             </TabsContent>
 
@@ -361,18 +485,50 @@ export default function BorrowerPage() {
             <TabsContent value="timeline" className="space-y-6">
               {borrower.loans?.length ? (
                 borrower.loans.map((loan) => (
-                  <Card key={loan.id} className="p-5 space-y-5 border hover:shadow-sm transition-shadow">
-                    <h3 className="text-base font-semibold">Loan #{loan.id} Timeline</h3>
+                  <Card
+                    key={loan.id}
+                    className="p-5 space-y-5 border hover:shadow-sm transition-shadow"
+                  >
+                    <h3 className="text-base font-semibold">
+                      Loan #{loan.id} Timeline
+                    </h3>
 
                     {/* Loan Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <Info label="Start Date" value={loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "-"} />
+                      <Info
+                        label="Start Date"
+                        value={
+                          loan.start_date
+                            ? new Date(loan.start_date).toLocaleDateString()
+                            : "-"
+                        }
+                      />
                       <Info
                         label="First Payment Date"
-                        value={loan.first_payment_date ? new Date(loan.first_payment_date).toLocaleDateString() : "-"}
+                        value={
+                          loan.first_payment_date
+                            ? new Date(
+                                loan.first_payment_date,
+                              ).toLocaleDateString()
+                            : "-"
+                        }
                       />
-                      <Info label="Approved At" value={loan.approved_at ? new Date(loan.approved_at).toLocaleDateString() : "-"} />
-                      <Info label="Created At" value={loan.created_at ? new Date(loan.created_at).toLocaleDateString() : "-"} />
+                      <Info
+                        label="Approved At"
+                        value={
+                          loan.approved_at
+                            ? new Date(loan.approved_at).toLocaleDateString()
+                            : "-"
+                        }
+                      />
+                      <Info
+                        label="Created At"
+                        value={
+                          loan.created_at
+                            ? new Date(loan.created_at).toLocaleDateString()
+                            : "-"
+                        }
+                      />
                     </div>
 
                     {/* Payments */}
@@ -389,13 +545,30 @@ export default function BorrowerPage() {
                           {loan.payments.map((payment) => {
                             const status = payment.status || "-"
                             const label = statusLabels[status] || status
-                            const style = statusStyles[status] || "bg-gray-100 text-gray-800"
+                            const style =
+                              statusStyles[status] ||
+                              "bg-gray-100 text-gray-800"
 
                             return (
-                              <li key={payment.id} className="grid grid-cols-4 gap-4 p-2 bg-muted rounded-md">
-                                <span className="font-medium w-24">Payment #{payment.id}</span>
-                                <span className="truncate w-48">{payment.transaction_id ? payment.transaction_id : "-"}</span>
-                                <span className="w-28">{payment.due_date ? new Date(payment.due_date).toLocaleDateString() : "-"}</span>
+                              <li
+                                key={payment.id}
+                                className="grid grid-cols-4 gap-4 p-2 bg-muted rounded-md"
+                              >
+                                <span className="font-medium w-24">
+                                  Payment #{payment.id}
+                                </span>
+                                <span className="truncate w-48">
+                                  {payment.transaction_id
+                                    ? payment.transaction_id
+                                    : "-"}
+                                </span>
+                                <span className="w-28">
+                                  {payment.due_date
+                                    ? new Date(
+                                        payment.due_date,
+                                      ).toLocaleDateString()
+                                    : "-"}
+                                </span>
                                 <Badge className={style}>{label}</Badge>
                               </li>
                             )
@@ -406,7 +579,9 @@ export default function BorrowerPage() {
                   </Card>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No timeline available.</p>
+                <p className="text-sm text-muted-foreground">
+                  No timeline available.
+                </p>
               )}
             </TabsContent>
           </Tabs>
@@ -414,12 +589,4 @@ export default function BorrowerPage() {
       </main>
     </div>
   )
-  function Info({ label, value }) {
-    return (
-      <div>
-        <p className="text-muted-foreground">{label}</p>
-        <p className="font-medium">{value}</p>
-      </div>
-    )
-  }
 }

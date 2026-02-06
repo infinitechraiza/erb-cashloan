@@ -226,14 +226,6 @@ export default function LoanDetailPage() {
                       </span>
                     </div>
                   )}
-                  {loan.loan_officer && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Loan Officer:</span>
-                      <span className="font-medium">
-                        {loan.loan_officer.first_name} {loan.loan_officer.last_name}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </Card>
             </div>
