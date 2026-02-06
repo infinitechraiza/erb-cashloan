@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
 
     // Parse JSON safely
     const data = await response.json();
-    console.log("[Payments API] Response data:", data);
 
     // Forward data to frontend
     return NextResponse.json(data);

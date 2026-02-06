@@ -207,7 +207,7 @@ export default function LenderPaymentsPage() {
       const token = localStorage.getItem("token")
       if (!paymentId) throw new Error("Invalid payment ID")
       if (!token) throw new Error("Unauthorized")
-        
+
       // Proxy URL in Next.js
       const proxyUrl = `/api/payments/${paymentId}/proof/download`
 

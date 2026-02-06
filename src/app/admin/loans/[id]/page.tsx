@@ -142,7 +142,7 @@ export default function LoanDetailPage() {
 
         <div className="px-8 py-8 max-w-7xl mx-auto space-y-8">
           {/* Back */}
-          <Button variant="outline" onClick={() => router.back()} className="gap-2">
+          <Button onClick={() => router.back()} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>

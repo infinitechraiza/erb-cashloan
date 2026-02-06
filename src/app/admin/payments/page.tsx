@@ -4,12 +4,13 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, CheckCircle, Eye, XCircle } from "lucide-react"
+import { AlertCircle, CheckCircle, Download, Eye, XCircle } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/paginated-data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import Image from "next/image"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 
 interface Loan {
@@ -197,6 +198,49 @@ export default function AdminPaymentsPage() {
       alert(err instanceof Error ? err.message : "Failed to verify")
     } finally {
       setVerifyActionLoading(false)
+    }
+  }
+
+  // Inside your component
+  const downloadFile = async (paymentId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      if (!paymentId) throw new Error("Invalid payment ID")
+      if (!token) throw new Error("Unauthorized")
+        
+      // Proxy URL in Next.js
+      const proxyUrl = `/api/payments/${paymentId}/proof/download`
+
+      const res = await fetch(proxyUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`, // include the token here
+        },
+      })
+      if (!res.ok) throw new Error("Failed to fetch file")
+
+      const blob = await res.blob()
+
+      // Extract filename from content-disposition header if present
+      const disposition = res.headers.get("content-disposition")
+      let fileName = "proof.png"
+
+      if (disposition?.includes("filename=")) {
+        const match = disposition.match(/filename="?(.+)"?/)
+        if (match && match[1]) fileName = match[1]
+      }
+
+      // Create temporary link to trigger download
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(blob)
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      toast.success("File downloaded successfully")
+    } catch (err) {
+      console.error("Download failed", err)
+      toast.error((err as Error).message || "Failed to download file")
     }
   }
 
@@ -487,10 +531,21 @@ export default function AdminPaymentsPage() {
           {/* Proof of Payment */}
           {selectedPayment?.proof_of_payment && (
             <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-500 mb-1">Proof of Payment</h4>
-              <img src={`${selectedPayment.proof_of_payment}`} alt="Proof" className="max-h-60 object-contain rounded border" />
+              <h4 className="text-sm font-semibold text-gray-500 mb-2">Proof of Payment</h4>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="font-medium">{selectedPayment.proof_of_payment.split("/").pop()}</p>
+                    <p className="text-sm text-muted-foreground">Proof of Payment</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => downloadFile(selectedPayment.id)}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
+
           <div className="grid grid-cols-2 gap-2 text-sm mb-2">
             <div>
               <p className="text-gray-600">Verified At</p>

@@ -24,11 +24,6 @@ const navigation = [
     icon: CreditCard,
   },
   {
-    name: "Reports",
-    href: "/admin/reports",
-    icon: File,
-  },
-  {
     name: "Users",
     href: "/admin/users",
     icon: User,

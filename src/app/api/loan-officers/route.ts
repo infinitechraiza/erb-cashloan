@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    console.log("[Next.js] Token received, length:", token.length);
 
     // Only allow admin users
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -18,8 +17,6 @@ export async function GET(request: NextRequest) {
 
     // Forward query params (like ?q=searchTerm)
     request.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value));
-
-    console.log("[Next.js] Fetching loan officers from Laravel:", url.toString());
 
     const response = await fetch(url.toString(), {
       method: "GET",

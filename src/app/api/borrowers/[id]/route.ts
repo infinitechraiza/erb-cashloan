@@ -67,10 +67,7 @@ export async function GET(
     // Parse successful JSON response
     try {
       const data = JSON.parse(responseText)
-      console.log("[v1] Successfully fetched borrower data:", {
-        borrowerId: id,
-        loansCount: data.borrower?.loans?.length ?? 0,
-      })
+     
       return NextResponse.json(data)
     } catch (e) {
       console.error("[v1] Failed to parse successful response:", responseText.substring(0, 500))

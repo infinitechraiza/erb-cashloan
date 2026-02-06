@@ -197,7 +197,21 @@ export default function ApplicationsPage() {
       header: "Borrower",
       accessorFn: (row) => (row.borrower ? `${row.borrower.first_name} ${row.borrower.last_name}` : "N/A"),
     },
-    { header: "Type", accessorKey: "type" },
+    {
+      header: "Type",
+      accessorKey: "type",
+      cell: ({ row }) => {
+        const value = row.getValue("type")
+        const labels = {
+          personal: "Personal Loan",
+          auto: "Auto Loan",
+          home: "Home Loan",
+          business: "Business Loan",
+          student: "Student Loan",
+        }
+        return labels[value] || value
+      },
+    },
     {
       header: "Principal Amount",
       accessorFn: (row) => `₱${Number(row.principal_amount).toLocaleString()}`,
@@ -560,20 +574,7 @@ export default function ApplicationsPage() {
     }
   }
 
-  const normalizedSearch = search.toLowerCase()
 
-  const filteredData = applications.filter((app) => {
-    if (normalizedSearch === "") return true
-
-    return (
-      String(app.id).includes(normalizedSearch) ||
-      app.borrower?.first_name?.toLowerCase().includes(normalizedSearch) ||
-      app.borrower?.last_name?.toLowerCase().includes(normalizedSearch)
-    )
-  })
-
-  const paginatedData = filteredData.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
-  const pageCount = Math.ceil(filteredData.length / pageSize)
 
   return (
     <div className="flex">
@@ -586,7 +587,7 @@ export default function ApplicationsPage() {
           </div>
         </header>
 
-        <div className="mt-8 grid grid-cols-4 gap-4 mb-6">
+        <div className="px-8 mt-8 grid grid-cols-4 gap-4 mb-6">
           <Card className="p-4 text-center">
             <h3 className="text-sm font-medium text-muted-foreground">Total Loans</h3>
             <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.total_loans ?? 0)}</p>
