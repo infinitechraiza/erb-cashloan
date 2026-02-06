@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, CheckCircle, Download, Eye, XCircle } from "lucide-react"
+import { AlertCircle, CheckCheckIcon, CheckCircle, Download, Eye, XCircle } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/paginated-data-table"
@@ -315,8 +315,13 @@ export default function AdminPaymentsPage() {
                 setSelectedPayment(row.original)
                 setViewPaymentOpen(true)
               }}
+              title={row.original.status !== "awaiting_verification" ? "View Details" : "Verify Payment"}
             >
-              <Eye className="h-4 w-4 text-blue-500" />
+              {row.original.status !== "awaiting_verification" ? (
+                <Eye className="h-4 w-4 text-gray-500" />
+              ) : (
+                <CheckCheckIcon className="h-4 w-4 text-blue-800" />
+              )}
             </Button>
           </>
         ),

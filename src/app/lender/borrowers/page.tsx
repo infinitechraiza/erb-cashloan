@@ -71,7 +71,7 @@ export default function LenderPaymentsPage() {
       id: "actions",
       header: "Actions",
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/lender/borrowers/${row.original.id}`)}>
+        <Button variant="ghost" size="sm" onClick={() => router.push(`/lender/borrowers/${row.original.id}`)} title="View Details">
           <Eye className="h-4 w-4 text-blue-500" />
         </Button>
       ),

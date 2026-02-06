@@ -535,28 +535,46 @@ export default function LenderLoansPage() {
 
                       {/* Status selector */}
                       <Select value={loan.status} onValueChange={(value) => openUpdateModal(loan, value)}>
-                        <SelectTrigger className="w-[140px] text-sm border-gray-200">
+                        <SelectTrigger className="w-[140px] text-sm border-gray-200" title="Change Status">
                           <SelectValue />
                         </SelectTrigger>
 
                         <SelectContent>
                           <SelectItem value="pending" disabled={loan.status !== "pending"}>
-                            Pending
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                              Pending
+                            </span>
                           </SelectItem>
                           <SelectItem value="approved" disabled={loan.status !== "pending"}>
-                            Approved
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-blue-600" />
+                              Approved
+                            </span>
                           </SelectItem>
                           <SelectItem value="rejected" disabled={loan.status !== "pending"}>
-                            Rejected
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-red-600" />
+                              Rejected
+                            </span>
                           </SelectItem>
                           <SelectItem value="active" disabled={loan.status !== "approved"}>
-                            Active
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-green-600" />
+                              Active
+                            </span>
                           </SelectItem>
                           <SelectItem value="completed" disabled={loan.status !== "active"}>
-                            Completed
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-gray-600" />
+                              Completed
+                            </span>
                           </SelectItem>
                           <SelectItem value="defaulted" disabled={loan.status !== "completed"}>
-                            Defaulted
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-black" />
+                              Defaulted
+                            </span>
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -849,32 +867,50 @@ export default function LenderLoansPage() {
                 <SelectContent>
                   {/* Pending → can only stay pending */}
                   <SelectItem value="pending" disabled={selectedLoan?.status !== "pending"}>
-                    Pending
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                      Pending
+                    </span>
                   </SelectItem>
 
                   {/* Pending → Approved */}
                   <SelectItem value="approved" disabled={selectedLoan?.status !== "pending"}>
-                    Approved
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-blue-600" />
+                      Approved
+                    </span>
                   </SelectItem>
 
                   {/* Pending → Rejected */}
                   <SelectItem value="rejected" disabled={selectedLoan?.status !== "pending"}>
-                    Rejected
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-red-600" />
+                      Rejected
+                    </span>
                   </SelectItem>
 
                   {/* Approved → Active */}
                   <SelectItem value="active" disabled={selectedLoan?.status !== "approved"}>
-                    Active
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-green-600" />
+                      Active
+                    </span>
                   </SelectItem>
 
                   {/* Active → Completed */}
                   <SelectItem value="completed" disabled={selectedLoan?.status !== "active"}>
-                    Completed
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gray-600" />
+                      Completed
+                    </span>
                   </SelectItem>
 
                   {/* Completed → Defaulted */}
                   <SelectItem value="defaulted" disabled={selectedLoan?.status !== "completed"}>
-                    Defaulted
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-black" />
+                      Defaulted
+                    </span>
                   </SelectItem>
                 </SelectContent>
               </Select>

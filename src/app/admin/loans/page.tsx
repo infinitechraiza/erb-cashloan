@@ -234,7 +234,7 @@ export default function ApplicationsPage() {
 
         return (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/loans/${loan.id}`)}>
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/loans/${loan.id}`)} title="View Details">
               <Eye className="h-4 w-4 text-blue-500" />
             </Button>
 
@@ -251,6 +251,7 @@ export default function ApplicationsPage() {
                 setShowUpdateModal(true)
                 setSelectedLenderId(loan.lender?.id ?? null)
               }}
+              title="Update Details"
             >
               <Edit2 className="h-4 w-4 text-green-500" />
             </Button>
@@ -288,7 +289,7 @@ export default function ApplicationsPage() {
                 }
               }}
             >
-              <SelectTrigger className="w-[140px] text-sm border-gray-100">
+              <SelectTrigger className="w-[140px] text-sm border-gray-100" title="Change Status">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
 
@@ -574,7 +575,14 @@ export default function ApplicationsPage() {
     }
   }
 
-
+  const statusDot: Record<string, string> = {
+    pending: "bg-yellow-500",
+    approved: "bg-blue-600",
+    rejected: "bg-red-600",
+    active: "bg-green-600",
+    completed: "bg-gray-600",
+    defaulted: "bg-black",
+  }
 
   return (
     <div className="flex">
@@ -666,7 +674,7 @@ export default function ApplicationsPage() {
         <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Approve Loan #{selectedApp?.loan_number}</DialogTitle>
+              <DialogTitle>Approve Loan #{selectedApp?.id}</DialogTitle>
             </DialogHeader>
 
             {/* Lender Assignment (Admin only) */}
@@ -720,12 +728,6 @@ export default function ApplicationsPage() {
                 <CheckCircle2 className="h-4 w-4 mr-2" /> Approve
               </Button>
             </div>
-
-            <DialogFooter>
-              <Button onClick={() => setShowApproveModal(false)} variant="ghost">
-                Cancel
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -733,7 +735,7 @@ export default function ApplicationsPage() {
         <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Reject Loan #{selectedApp?.loan_number}</DialogTitle>
+              <DialogTitle>Reject Loan #{selectedApp?.id}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <Textarea placeholder="Rejection Reason" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} />
@@ -741,11 +743,6 @@ export default function ApplicationsPage() {
                 <XCircle className="h-4 w-4 mr-2" /> Reject
               </Button>
             </div>
-            <DialogFooter>
-              <Button onClick={() => setShowRejectModal(false)} variant="ghost">
-                Cancel
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -767,6 +764,7 @@ export default function ApplicationsPage() {
                   <SelectContent>
                     {["pending", "approved", "rejected", "active", "completed", "defaulted"].map((s) => (
                       <SelectItem key={s} value={s}>
+                        <span className={`h-2 w-2 rounded-full ${statusDot[s]}`} />
                         {s.charAt(0).toUpperCase() + s.slice(1)}
                       </SelectItem>
                     ))}
