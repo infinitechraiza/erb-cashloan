@@ -15,8 +15,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const url = `${laravelUrl}/api/loans/${id}/activate`
 
     console.log("[Activate Loan API] Activating loan:", id)
-    console.log("[Activate Loan API] Activating loan:", body)
-    
+
     const response = await fetch(url, {
       method: "POST",
       headers: {

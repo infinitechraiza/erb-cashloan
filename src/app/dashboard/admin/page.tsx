@@ -209,7 +209,6 @@ export default function AdminDashboard() {
 
     return (
         <div className="flex min-h-screen bg-background">
-            <AdminSidebar />
             <div className="flex-1 lg:ml-0">
                 <div className="lg:hidden h-16" />
                 <header className="border-b border-border bg-card">

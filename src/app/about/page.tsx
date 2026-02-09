@@ -1,14 +1,12 @@
 'use client';
 
 import { Check, Plus, Minus, ChevronRight, Badge, Clock, Percent, ShieldCheck, CreditCard, Target, Eye, Heart, TrendingUp, Users } from 'lucide-react';
-import { Navbar } from '@/components/navbar';
-import { Footer } from '@/components/footer';
+import { Footer } from '@/components/layout/footer';
 
 export default function AboutPage() {
 
     return (
         <main className="min-h-screen bg-white">
-            <Navbar />
 
             {/* Hero Section*/}
             <section className="bg-linear-to-r from-cyan-950 to-blue-900">

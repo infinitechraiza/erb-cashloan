@@ -173,7 +173,6 @@ export default function AdminDashboard() {
 
     return (
         <div className="flex min-h-screen bg-background">
-            <LenderSidebar />
             <div className="flex-1">
                 <div className="lg:hidden h-16" />
                 <header className="border-b border-border bg-card px-4 sm:px-6 py-4">

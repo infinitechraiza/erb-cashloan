@@ -1,25 +1,35 @@
-"use client"
+'use client';
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/components/auth-context"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle2, XCircle, Eye, FileText, Loader2, Download, Edit2 } from "lucide-react"
-import { Label } from "@/components/ui/label"
-import { toast } from "sonner"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ColumnDef } from "@tanstack/react-table"
-import { DataTable } from "@/components/data-table"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, PlusCircle, CheckCircle2, XCircle, User, DollarSign, Calendar, FileText, AlertCircle, Eye, PieChart, TrendingUp, TrendingDown } from "lucide-react";
+
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { ReusableDataTable, ColumnDef, FilterConfig } from "@/components/data-table";
+// import { TestLoansTable } from "@/components/testloan-datatable";
+
 
 interface LoanApplication {
   id: number
-  loan_number: string
   type: string
   principal_amount: string
   approved_amount?: string
@@ -34,333 +44,287 @@ interface LoanApplication {
   notes?: string
   rejection_reason?: string
   outstanding_balance?: string
-  employment_status?: string
   borrower?: {
     first_name: string
     last_name: string
     email?: string
   }
   lender?: {
-    first_name: string
-    last_name: string
-    email?: string
-  }
-  loan_officer?: {
-    first_name: string
-    last_name: string
-    email?: string
-  }
-  documents?: Array<{
     id: number
-    name?: string
-    file_name?: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any
-  }>
+    first_name: string
+    last_name: string
+    email?: string
+  }
 }
 
 interface Lender {
   id: number
-  first_name: string
-  last_name: string
+  first_name?: string
+  last_name?: string
   email?: string
 }
 
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700 capitalize",
-  approved: "bg-blue-100 text-blue-700 capitalize",
-  rejected: "bg-red-100 text-red-700 capitalize",
-  active: "bg-green-100 text-green-700 capitalize",
-  completed: "bg-gray-100 text-gray-700 capitalize",
-  defaulted: "bg-black text-white capitalize",
+interface LoanStats {
+  total_loans: number;
+  pending_loans: number;
+  active_loans: number;
+  total_disbursed: number;
 }
 
-export default function ApplicationsPage() {
-  const router = useRouter()
-  const { authenticated, loading, user } = useAuth()
-  const [applications, setApplications] = useState<LoanApplication[]>([])
-  const [selectedApp, setSelectedApp] = useState<LoanApplication | null>(null)
-  const [appLoading, setAppLoading] = useState(true)
-  const [lenders, setLenders] = useState<Lender[]>([])
+const statusColors: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  approved: "bg-blue-100 text-blue-700 border-blue-200",
+  rejected: "bg-red-100 text-red-700 border-red-200",
+  active: "bg-green-100 text-green-700 border-green-200",
+  completed: "bg-gray-100 text-gray-700 border-gray-200",
+  defaulted: "bg-black text-white border-black",
+}
 
-  //stats
-  const [loanStats, setLoanStats] = useState<{
-    total_loans: number
-    pending_loans: number
-    active_loans: number
-    total_disbursed: number
-  } | null>(null)
-  const [statsLoading, setStatsLoading] = useState(false)
-
-  // Pagination state
-  const [pageIndex, setPageIndex] = useState(0)
-  const [pageSize, setPageSize] = useState(10)
-
-  // Search state
-  const [search, setSearch] = useState("")
+const LoansManagementPage = () => {
+  const [loanStats, setLoanStats] = useState<LoanStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [lenders, setLenders] = useState<Lender[]>([]);
+  const [refresh, setRefresh] = useState(false);
 
   // Modal states
-  const [showApproveModal, setShowApproveModal] = useState(false)
-  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<LoanApplication | null>(null);
 
-  // activate modal states
-  const [showActivateModal, setShowActivateModal] = useState(false)
-  const [activateStartDate, setActivateStartDate] = useState("")
-  const [activateFirstPaymentDate, setActivateFirstPaymentDate] = useState("")
-  const [activating, setActivating] = useState(false)
+  // Form states
+  const [approvedAmount, setApprovedAmount] = useState("");
+  const [interestRate, setInterestRate] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [selectedLenderId, setSelectedLenderId] = useState<number | null>(null);
+  const [activateStartDate, setActivateStartDate] = useState("");
+  const [activateFirstPaymentDate, setActivateFirstPaymentDate] = useState("");
+  const [updating, setUpdating] = useState(false);
 
-  // Approve form states
-  const [approvedAmount, setApprovedAmount] = useState("")
-  const [approvedRate, setApprovedRate] = useState("")
 
-  // Reject form state
-  const [rejectionReason, setRejectionReason] = useState("")
+  useEffect(() => {
+    const debugFetch = async () => {
+      const token = localStorage.getItem("token");
+      console.log("🔑 Token exists:", !!token);
+      console.log("🔑 Token value:", token?.substring(0, 20) + "...");
 
-  // update modal
-  const [showUpdateModal, setShowUpdateModal] = useState(false)
-  const [status, setStatus] = useState("")
-  const [interestRate, setInterestRate] = useState("")
-  const [notes, setNotes] = useState("")
-  const [updating, setUpdating] = useState(false)
-  const [selectedLenderId, setSelectedLenderId] = useState<number | null>(null)
+      try {
+        const response = await fetch("/api/loans", {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()));
+
+        const data = await response.json();
+        console.log("📦 Full API response:", data);
+        console.log("📊 Data structure:", {
+          hasData: !!data.data,
+          dataIsArray: Array.isArray(data.data),
+          dataLength: data.data?.length || 0,
+          total: data.total,
+          currentPage: data.current_page
+        });
+        console.log("📋 First loan:", data.data?.[0]);
+      } catch (error) {
+        console.error("❌ Fetch error:", error);
+      }
+    };
+
+    debugFetch();
+  }, []);
+
+  // Fetch stats and lenders on mount
+  useEffect(() => {
+    fetchLoanStatistics();
+    fetchLenders();
+  }, []);
+
+  const handleRefresh = () => {
+    setRefresh(!refresh);
+    fetchLoanStatistics();
+  };
 
   const fetchLoanStatistics = async () => {
     try {
-      setStatsLoading(true)
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Not authenticated")
+      setStatsLoading(true);
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        toast.error("Authentication Error", { description: "Please log in again" });
+        return;
+      }
 
       const res = await fetch(`/api/loans/statistics`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (!res.ok) throw new Error("Failed to fetch statistics")
-      const data = await res.json()
-      setLoanStats(data.data)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setStatsLoading(false)
-    }
-  }
+      if (!res.ok) {
+        throw new Error(`Failed to fetch statistics: ${res.status}`);
+      }
 
-  const fetchApplications = async () => {
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch("/api/loans?status=pending", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!response.ok) throw new Error("Failed to fetch applications")
-      const data = await response.json()
-      const loans = Array.isArray(data.loans) ? data.loans : (data.loans?.data ?? [])
-      setApplications(loans)
+      const data = await res.json();
+      setLoanStats(data.data || data);
     } catch (err) {
-      console.error(err)
+      console.error('Error fetching statistics:', err);
+      toast.error("Error", {
+        description: err instanceof Error ? err.message : "Failed to fetch loan statistics"
+      });
     } finally {
-      setAppLoading(false)
+      setStatsLoading(false);
     }
-  }
+  };
 
   const fetchLenders = async () => {
     try {
-      const token = localStorage.getItem("token")
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        console.error('No token available for fetching lenders');
+        return;
+      }
+
       const res = await fetch("/api/lenders", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error("Failed to fetch lenders")
-      const data = await res.json()
-      setLenders(data.lenders)
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  useEffect(() => {
-    fetchLoanStatistics()
-    fetchApplications()
-    fetchLenders()
-  }, [])
-
-  const getColumns = (
-    statusColors: Record<string, string>,
-    setSelectedApp: any,
-    setStatus: any,
-    setApprovedAmount: any,
-    setInterestRate: any,
-    setNotes: any,
-    setRejectionReason: any,
-    setShowUpdateModal: any,
-    router: any,
-  ): ColumnDef<LoanApplication, any>[] => [
-      { header: "Loan Number", accessorKey: "id" },
-      {
-        header: "Borrower",
-        accessorFn: (row) => (row.borrower ? `${row.borrower.first_name} ${row.borrower.last_name}` : "N/A"),
-      },
-      { header: "Type", accessorKey: "type" },
-      {
-        header: "Principal Amount",
-        accessorFn: (row) => `₱${Number(row.principal_amount).toLocaleString()}`,
-      },
-      {
-        header: "Approved Amount",
-        accessorFn: (row) => (row.approved_amount ? `₱${Number(row.approved_amount).toLocaleString()}` : "-"),
-      },
-      { header: "Rate", accessorFn: (row) => `${row.interest_rate}%` },
-      {
-        header: "Status",
-        accessorKey: "status",
-        cell: ({ row }) => <Badge className={statusColors[row.original.status] || "bg-gray-100"}>{row.original.status}</Badge>,
-      },
-      { header: "Submitted", accessorFn: (row) => new Date(row.created_at).toLocaleDateString() },
-      {
-        header: "Actions",
-        cell: ({ row }) => {
-          const loan = row.original
-
-          return (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/loans/${loan.id}`)}>
-                <Eye className="h-4 w-4 text-blue-500" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedApp(loan)
-                  setStatus(loan.status)
-                  setApprovedAmount(loan.approved_amount ?? "")
-                  setInterestRate(loan.interest_rate ?? "")
-                  setNotes(loan.notes ?? "")
-                  setRejectionReason(loan.rejection_reason ?? "")
-                  setShowUpdateModal(true)
-                  setSelectedLenderId(loan.lender?.id ?? null)
-                }}
-              >
-                <Edit2 className="h-4 w-4 text-green-500" />
-              </Button>
-
-              <Select
-                value={row.original.status}
-                onValueChange={(value) => {
-                  const loan = row.original
-                  setSelectedApp(loan)
-
-                  switch (value) {
-                    case "approved":
-                      setApprovedAmount(loan.approved_amount ?? "")
-                      setApprovedRate(loan.interest_rate ?? "")
-                      setShowApproveModal(true)
-                      break
-
-                    case "rejected":
-                      setRejectionReason(loan.rejection_reason ?? "")
-                      setShowRejectModal(true)
-                      break
-
-                    case "active":
-                      setActivateStartDate(loan.start_date ?? "")
-                      setActivateFirstPaymentDate(loan.first_payment_date ?? "")
-                      setShowActivateModal(true)
-                      break
-
-                    default:
-                      // For other status changes, use update modal
-                      setStatus(value)
-                      setNotes(loan.notes ?? "")
-                      setShowUpdateModal(true)
-                      break
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[140px] text-sm border-gray-100">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="pending" disabled={loan.status === "completed" || loan.status === "defaulted"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-yellow-500" />
-                      Pending
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="approved" disabled={loan.status !== "pending"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-blue-600" />
-                      Approved
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="rejected" disabled={loan.status !== "pending"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-red-600" />
-                      Rejected
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="active" disabled={loan.status !== "approved"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-green-600" />
-                      Active
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="completed" disabled={loan.status !== "active"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-gray-600" />
-                      Completed
-                    </span>
-                  </SelectItem>
-
-                  <SelectItem value="defaulted" disabled={loan.status !== "completed"}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-black" />
-                      Defaulted
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      },
-    ]
+      });
 
-  const columns = getColumns(
-    statusColors,
-    setSelectedApp,
-    setStatus,
-    setApprovedAmount,
-    setInterestRate,
-    setNotes,
-    setRejectionReason,
-    setShowUpdateModal,
-    router,
-  )
+      if (!res.ok) {
+        throw new Error(`Failed to fetch lenders: ${res.status}`);
+      }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
-  if (!authenticated || !["admin", "loan_officer"].includes(user?.role || "")) {
-    router.push("/dashboard")
-    return null
-  }
+      const data = await res.json();
+      console.log('Lenders data:', data);
 
-  // Handlers
-  const handleActivate = async () => {
-    if (!selectedApp) return
-    setActivating(true)
+      setLenders(data.lenders || data.data || []);
+    } catch (err) {
+      console.error('Error fetching lenders:', err);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant="outline" className={statusColors[status] || "bg-gray-100"}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Badge>
+    );
+  };
+
+  const handleApprove = async () => {
+    if (!approvedAmount || !selectedLoan) {
+      toast.error("Error", { description: "Amount is required" });
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Not authenticated")
+      setUpdating(true);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+
+      const body: Record<string, any> = {
+        approved_amount: Number(approvedAmount),
+        interest_rate: interestRate ? Number(interestRate) : undefined,
+      };
+
+      if (selectedLenderId) body.lender_id = selectedLenderId;
+
+      const res = await fetch(`/api/loans/${selectedLoan.id}/approve`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to approve loan" }));
+        throw new Error(error.message || "Failed to approve loan");
+      }
+
+      const data = await res.json();
+      toast.success("Success", { description: data.message || "Loan approved successfully" });
+
+      setApprovedAmount("");
+      setInterestRate("");
+      setSelectedLoan(null);
+      setShowApproveModal(false);
+      handleRefresh();
+    } catch (err) {
+      console.error('Approve error:', err);
+      toast.error("Error", {
+        description: err instanceof Error ? err.message : "An error occurred",
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedLoan) return;
+
+    try {
+      setUpdating(true);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+
+      const body = {
+        reason: rejectionReason || null,
+      };
+
+      const res = await fetch(`/api/loans/${selectedLoan.id}/reject`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to reject loan" }));
+        throw new Error(error.message || "Failed to reject loan");
+      }
+
+      const data = await res.json();
+      toast.success("Success", { description: data.message || "Loan rejected successfully" });
+
+      setRejectionReason("");
+      setSelectedLoan(null);
+      setShowRejectModal(false);
+      handleRefresh();
+    } catch (err) {
+      console.error('Reject error:', err);
+      const errorMsg = err instanceof Error ? err.message : "An error occurred";
+      toast.error("Error", { description: errorMsg });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    if (!selectedLoan) return;
+    setUpdating(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
 
       const body = {
         start_date: activateStartDate || null,
         first_payment_date: activateFirstPaymentDate || null,
-        notes: notes || null,
-      }
+      };
 
-      const res = await fetch(`/api/loans/${selectedApp.id}/activate`, {
+      const res = await fetch(`/api/loans/${selectedLoan.id}/activate`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -368,507 +332,678 @@ export default function ApplicationsPage() {
           Accept: "application/json",
         },
         body: JSON.stringify(body),
-      })
+      });
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: "Failed to activate loan" }))
-        throw new Error(error.message || "Failed to activate loan")
+        const error = await res.json().catch(() => ({ message: "Failed to activate loan" }));
+        throw new Error(error.message || "Failed to activate loan");
       }
 
-      const data = await res.json()
-      toast.success("Loan activated successfully", { description: data.message })
-      setShowActivateModal(false)
-      setActivateStartDate("")
-      setActivateFirstPaymentDate("")
-      setSelectedApp(null)
-      fetchApplications()
-      fetchLoanStatistics()
+      const data = await res.json();
+      toast.success("Loan activated successfully", { description: data.message });
+      setShowActivateModal(false);
+      setActivateStartDate("");
+      setActivateFirstPaymentDate("");
+      setSelectedLoan(null);
+      handleRefresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "An error occurred"
-      toast.error("Error activating loan", { description: message })
+      console.error('Activate error:', err);
+      const message = err instanceof Error ? err.message : "An error occurred";
+      toast.error("Error activating loan", { description: message });
     } finally {
-      setActivating(false)
+      setUpdating(false);
     }
-  }
+  };
 
-  const handleApprove = async () => {
-    if (!approvedAmount) {
-      toast.error("Error", { description: "Amount and officer are required" })
-      return
-    }
+  // Define columns for the data table - FIXED TO USE 'id' INSTEAD OF 'loan_number'
+  const columns: ColumnDef<LoanApplication>[] = [
+    {
+      key: "id",  // ✅ CHANGED FROM "loan_number" to "id"
+      label: "Loan ID",
+      sortable: true,
+      width: "w-[120px]",
+      render: (value) => (  // ✅ SIMPLIFIED - just use value directly
+        <span className="font-medium text-blue-800">
+          #{value}
+        </span>
+      ),
+    },
+    {
+      key: "borrower",
+      label: "Borrower",
+      width: "w-[180px]",
+      render: (value) => (
+        value ? `${value.first_name} ${value.last_name}` : "N/A"
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      sortable: true,
+      width: "w-[120px]",
+      render: (value) => (
+        <span className="capitalize">{value}</span>
+      ),
+    },
+    {
+      key: "principal_amount",
+      label: "Principal",
+      sortable: true,
+      width: "w-[140px]",
+      render: (value) => (
+        <span className="font-semibold">₱{Number(value).toLocaleString()}</span>
+      ),
+    },
+    {
+      key: "approved_amount",
+      label: "Approved",
+      width: "w-[140px]",
+      render: (value) => (
+        value ? (
+          <span className="font-semibold text-green-700">
+            ₱{Number(value).toLocaleString()}
+          </span>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )
+      ),
+    },
+    {
+      key: "interest_rate",
+      label: "Rate",
+      width: "w-[80px]",
+      align: "center",
+      render: (value) => `${value}%`,
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      width: "w-[120px]",
+      align: "center",
+      render: (value) => getStatusBadge(value),
+    },
+    {
+      key: "created_at",
+      label: "Submitted",
+      sortable: true,
+      width: "w-[140px]",
+      render: (value) => new Date(value).toLocaleDateString(),
+    },
+  ];
 
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Not authenticated")
+  // Define filters
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      defaultValue: "all",
+      options: [
+        { value: "all", label: "All Status" },
+        { value: "pending", label: "Pending" },
+        { value: "approved", label: "Approved" },
+        { value: "rejected", label: "Rejected" },
+        { value: "active", label: "Active" },
+        { value: "completed", label: "Completed" },
+        { value: "defaulted", label: "Defaulted" },
+      ],
+    },
+  ];
 
-      const body: Record<string, any> = {
-        approved_amount: Number(approvedAmount),
-        interest_rate: approvedRate ? Number(approvedRate) : undefined,
-      }
 
-      if (selectedLenderId) body.lender_id = selectedLenderId
 
-      const res = await fetch(`/api/loans/${selectedApp?.id}/approve`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(body),
-      })
+  // Row actions - conditionally show approve/reject/activate buttons
+  const rowActions = (loan: LoanApplication) => (
+    <div className="flex items-center gap-2 justify-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setSelectedLoan(loan)
+        }}
+      >
+        <Eye className="h-4 w-4 text-blue-500" />
+      </Button>
+      {loan.status === "pending" && (
+        <>
 
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: "Failed to approve loan" }))
-        throw new Error(error.message || "Failed to approve loan")
-      }
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedLoan(loan);
+              setApprovedAmount(loan.principal_amount);
+              setInterestRate(loan.interest_rate);
+              setShowApproveModal(true);
+            }}
+            title="Approve"
+          >
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedLoan(loan);
+              setShowRejectModal(true);
+            }}
+            title="Reject"
+          >
+            <XCircle className="h-4 w-4 text-red-600" />
+          </Button>
+        </>
+      )}
+      {loan.status === "approved" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedLoan(loan);
+            setShowActivateModal(true);
+          }}
+          title="Activate"
+        >
+          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+        </Button>
+      )}
+    </div>
+  );
 
-      const data = await res.json()
-      toast.success("Success", { description: data.message })
+  // Details dialog render
+  const renderDetailsDialog = (loan: LoanApplication) => (
+    <>
+      {/* Header with gradient background */}
+      <div className="bg-gradient-to-br from-blue-800 to-blue-600 px-8 py-6">
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Loan Details #{loan.id}
+        </h2>
+        <p className="text-blue-100 text-sm">View detailed loan information</p>
+      </div>
 
-      // Reset form
-      setApprovedAmount("")
-      setApprovedRate("")
-      setSelectedApp(null)
-      setShowApproveModal(false)
-
-      fetchApplications()
-      fetchLoanStatistics()
-    } catch (err) {
-      console.error(err)
-      toast.error("Error", {
-        description: err instanceof Error ? err.message : "An error occurred",
-      })
-    }
-  }
-
-  const handleReject = async () => {
-    if (!selectedApp) return
-
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Not authenticated")
-
-      const body = {
-        reason: rejectionReason || null,
-      }
-
-      const res = await fetch(`/api/loans/${selectedApp.id}/reject`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(body),
-      })
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: "Failed to reject loan" }))
-        throw new Error(error.message || "Failed to reject loan")
-      }
-
-      const data = await res.json()
-      toast.success("Success", { description: data.message || "Loan rejected successfully" })
-
-      setRejectionReason("")
-      setSelectedApp(null)
-      setShowRejectModal(false)
-
-      fetchApplications()
-      fetchLoanStatistics()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "An error occurred"
-      toast.error("Error", { description: errorMsg })
-    }
-  }
-
-  const handleUpdateLoan = async () => {
-    if (!selectedApp) return
-    setUpdating(true)
-
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Unauthorized")
-
-      if (status === "active") {
-        // Use activate API if status is active
-        const body = {
-          start_date: activateStartDate || null,
-          first_payment_date: activateFirstPaymentDate || null,
-          notes: notes || null,
-        }
-
-        const res = await fetch(`/api/loans/${selectedApp.id}/activate`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(body),
-        })
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: "Failed to activate loan" }))
-          throw new Error(err.message || "Failed to activate loan")
-        }
-
-        const data = await res.json()
-        toast.success("Loan activated successfully", { description: data.message })
-      } else {
-        // Use normal update API for other statuses
-        const payload: Record<string, any> = {}
-
-        if (status && status !== selectedApp.status) payload.status = status
-        if (notes !== "") payload.notes = notes
-        if (status === "approved" && approvedAmount !== "") payload.approved_amount = Number(approvedAmount)
-        if (status === "approved" && interestRate !== "") payload.interest_rate = Number(interestRate)
-        if (user?.role === "admin" && selectedLenderId) payload.lender_id = selectedLenderId
-        if (status === "rejected" && rejectionReason !== "") payload.rejection_reason = rejectionReason
-
-        const res = await fetch(`/api/loans/${selectedApp.id}`, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(payload),
-        })
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.message || "Update failed")
-        }
-
-        toast.success("Loan updated successfully")
-      }
-
-      // Reset modal & refresh data
-      setShowUpdateModal(false)
-      setSelectedApp(null)
-      setActivateStartDate("")
-      setActivateFirstPaymentDate("")
-      setNotes("")
-      fetchApplications()
-      fetchLoanStatistics()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update loan")
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const normalizedSearch = search.toLowerCase()
-
-  const filteredData = applications.filter((app) => {
-    if (normalizedSearch === "") return true
-
-    return (
-      String(app.id).includes(normalizedSearch) ||
-      app.borrower?.first_name?.toLowerCase().includes(normalizedSearch) ||
-      app.borrower?.last_name?.toLowerCase().includes(normalizedSearch)
-    )
-  })
-
-  const paginatedData = filteredData.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
-  const pageCount = Math.ceil(filteredData.length / pageSize)
-
-  return (
-    <div className="flex min-h-screen">
-      <AdminSidebar />
-      <main className="flex-1 bg-background min-h-screen">
-        <header className="border-b border-border bg-card sticky top-0 z-40">
-          <div className="px-8 py-6">
-            <h1 className="text-3xl font-bold text-primary">Loan Applications</h1>
-            <p className="text-muted-foreground mt-1">Review and process pending applications</p>
+      {/* Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-180px)]">
+        {/* Status Section */}
+        <div className="bg-white px-8 py-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">
+                {loan.type.charAt(0).toUpperCase() + loan.type.slice(1)} Loan
+              </h3>
+              <p className="text-sm text-gray-500">Loan #{loan.id}</p>
+            </div>
+            {getStatusBadge(loan.status)}
           </div>
-        </header>
-
-        <div className="mt-8 grid grid-cols-4 gap-4 mb-6 px-6">
-          <Card className="p-4 text-center">
-            <h3 className="text-sm font-medium text-muted-foreground">Total Loans</h3>
-            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.total_loans ?? 0)}</p>
-          </Card>
-          <Card className="p-4 text-center">
-            <h3 className="text-sm font-medium text-muted-foreground">Pending Loans</h3>
-            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.pending_loans ?? 0)}</p>
-          </Card>
-          <Card className="p-4 text-center">
-            <h3 className="text-sm font-medium text-muted-foreground">Active Loans</h3>
-            <p className="text-xl font-bold">{statsLoading ? "..." : (loanStats?.active_loans ?? 0)}</p>
-          </Card>
-          <Card className="p-4 text-center">
-            <h3 className="text-sm font-medium text-muted-foreground">Total Disbursed</h3>
-            <p className="text-xl font-bold">{statsLoading ? "..." : `₱${Number(loanStats?.total_disbursed ?? 0).toLocaleString()}`}</p>
-          </Card>
         </div>
 
-        <div className="px-8 py-4">
-          <DataTable
-            columns={columns}
-            data={applications}
-            search={search}
-            onSearchChange={(val) => setSearch(val)}
-            searchFields={["id", "borrower"]}
-          />
-        </div>
+        {/* Information Grid */}
+        <div className="bg-gray-50 px-8 py-6">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <User className="h-5 w-5 text-blue-800" />
+            Borrower & Lender Information
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Borrower */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <div className="flex flex-col items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <User className="h-5 w-5 text-blue-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Borrower
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {loan.borrower ? `${loan.borrower.first_name} ${loan.borrower.last_name}` : "N/A"}
+                  </p>
+                  {loan.borrower?.email && (
+                    <p className="text-balance text-xs font-bold text-gray-500 mt-1">{loan.borrower.email}</p>
 
-        {/* Activate Loan Modal */}
-        <Dialog open={showActivateModal} onOpenChange={setShowActivateModal}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Activate Loan #{selectedApp?.id}</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 mt-2">
-              <div className="space-y-1">
-                <label htmlFor="activateStartDate" className="text-sm font-medium">
-                  Start Date
-                </label>
-                <Input id="activateStartDate" type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
+                  )}
+                </div>
               </div>
-
-              <div className="space-y-1">
-                <label htmlFor="activateFirstPaymentDate" className="text-sm font-medium">
-                  First Payment Date
-                </label>
-                <Input
-                  id="activateFirstPaymentDate"
-                  type="date"
-                  value={activateFirstPaymentDate}
-                  onChange={(e) => setActivateFirstPaymentDate(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="activateFirstPaymentDate" className="text-sm font-medium">
-                  Note
-                </label>
-                <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-              <Button className="w-full" onClick={handleActivate} disabled={activating}>
-                <CheckCircle2 className="h-4 w-4 mr-2" /> {activating ? "Activating..." : "Activate Loan"}
-              </Button>
             </div>
 
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setShowActivateModal(false)}>
-                Cancel
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            {/* Lender */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <div className="flex flex-col items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <User className="h-5 w-5 text-green-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Lender
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {loan.lender ? `${loan.lender.first_name} ${loan.lender.last_name}` : "Unassigned"}
+                  </p>
+                  {loan.lender?.email && (
+                    <p className="text-xs text-gray-500 mt-1">{loan.lender.email}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
-        {/* Approve Modal */}
-        <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Approve Loan #{selectedApp?.loan_number}</DialogTitle>
-            </DialogHeader>
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-blue-800" />
+            Loan Details
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Principal Amount */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Principal Amount
+              </label>
+              <p className="text-lg font-bold text-gray-900 mt-1">
+                ₱{Number(loan.principal_amount).toLocaleString()}
+              </p>
+            </div>
 
-            {/* Lender Assignment (Admin only) */}
-            {user?.role === "admin" && (
-              <div className="space-y-1">
-                <Label>Assign Lender</Label>
-                <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Lender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lenders.map((lender) => (
-                      <SelectItem key={lender.id} value={lender.id.toString()}>
-                        {lender.first_name} {lender.last_name} ({lender.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  This is optional. If left unassigned, a lender may assign the loan to themselves later.
+            {/* Approved Amount */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Approved Amount
+              </label>
+              <p className="text-lg font-bold text-green-700 mt-1">
+                {loan.approved_amount ? `₱${Number(loan.approved_amount).toLocaleString()}` : "-"}
+              </p>
+            </div>
+
+            {/* Interest Rate */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Interest Rate
+              </label>
+              <p className="text-lg font-bold text-gray-900 mt-1">{loan.interest_rate}%</p>
+            </div>
+
+            {/* Term */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Loan Term
+              </label>
+              <p className="text-lg font-bold text-gray-900 mt-1">
+                {loan.term_months ? `${loan.term_months} months` : "-"}
+              </p>
+            </div>
+
+            {/* Submitted Date */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="h-5 w-5 text-blue-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Submitted
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {new Date(loan.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Outstanding Balance */}
+            {loan.outstanding_balance && (
+              <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Outstanding Balance
+                </label>
+                <p className="text-lg font-bold text-red-700 mt-1">
+                  ₱{Number(loan.outstanding_balance).toLocaleString()}
                 </p>
               </div>
             )}
 
-            <div className="space-y-4">
-              {/* Approved Amount */}
-              <div className="space-y-2">
-                <Label htmlFor="approvedAmount">Approved Amount</Label>
-                <Input
-                  id="approvedAmount"
-                  type="number"
-                  placeholder="Approved Amount"
-                  value={approvedAmount}
-                  onChange={(e) => setApprovedAmount(e.target.value)}
-                />
+            {/* Purpose */}
+            {loan.purpose && (
+              <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm md:col-span-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-purple-800" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Loan Purpose
+                    </label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">{loan.purpose}</p>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Interest Rate */}
-              <div className="space-y-2">
-                <Label htmlFor="approvedRate">Interest Rate (%)</Label>
-                <Input
-                  id="approvedRate"
-                  type="number"
-                  placeholder="Interest Rate (%)"
-                  value={approvedRate}
-                  onChange={(e) => setApprovedRate(e.target.value)}
-                />
+            {/* Notes */}
+            {loan.notes && (
+              <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm md:col-span-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-yellow-800" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notes
+                    </label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">{loan.notes}</p>
+                  </div>
+                </div>
               </div>
+            )}
 
-              <Button className="w-full" onClick={handleApprove}>
-                <CheckCircle2 className="h-4 w-4 mr-2" /> Approve
-              </Button>
-            </div>
+            {/* Rejection Reason */}
+            {loan.rejection_reason && (
+              <div className="bg-white rounded-lg p-4 border border-red-200 shadow-sm md:col-span-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                    <AlertCircle className="h-5 w-5 text-red-800" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="text-xs font-medium text-red-500 uppercase tracking-wider">
+                      Rejection Reason
+                    </label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">{loan.rejection_reason}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
 
-            <DialogFooter>
-              <Button onClick={() => setShowApproveModal(false)} variant="ghost">
-                Cancel
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+  return (
+    <div className="min-h-screen">
 
-        {/* Reject Modal */}
-        <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Reject Loan #{selectedApp?.loan_number}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Textarea placeholder="Rejection Reason" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} />
-              <Button className="w-full" onClick={handleReject} variant="destructive">
-                <XCircle className="h-4 w-4 mr-2" /> Reject
-              </Button>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => setShowRejectModal(false)} variant="ghost">
-                Cancel
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Update Modal */}
-        <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Update Loan #{selectedApp?.id}</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Status is always visible */}
+      <main className="min-h-screen bg-white">
+        <header className="border-b border-border bg-card sticky top-16 lg:top-0 z-40">
+          <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["pending", "approved", "rejected", "active", "completed", "defaulted"].map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <h1 className="text-2xl sm:text-3xl font-bold text-primary">Loan Management</h1>
+                <p className="text-sm sm:text-base text-muted-foreground mt-1">
+                  Centralized administration of loan applications and accounts
+                </p>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleRefresh}
+                  className="flex items-center gap-2"
+                  size="sm"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+
+                <Button
+                  onClick={() => window.location.href = '/admin/loans/new'}
+                  className="flex items-center gap-2"
+                  size="sm"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">New Loan</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Stats Cards */}
+        <div className="w-full px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
+
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Total Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.total_loans ?? 0}
+                  </p>
+                </div>
               </div>
 
-              {(() => {
-                // Determine what fields to show based on status
-                const isPendingOrApproved = status === "pending" || status === "approved"
-                const isRejected = status === "rejected"
-                const isActive = status === "active"
-                const isCompleted = status === "completed"
-                const isDefaulted = status === "defaulted"
+            </Card>
 
-                return (
-                  <>
-                    {/* Lender Assignment (Admin only) */}
-                    {user?.role === "admin" && (isPendingOrApproved || isActive) && (
-                      <div className="space-y-1">
-                        <Label>Assign Lender</Label>
-                        <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Lender" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {lenders.map((lender) => (
-                              <SelectItem key={lender.id} value={lender.id.toString()}>
-                                {lender.first_name} {lender.last_name} ({lender.email})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">Optional. If unassigned, a lender may assign the loan to themselves later.</p>
-                      </div>
-                    )}
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
 
-                    {/* Approved Amount & Interest Rate */}
-                    {isPendingOrApproved && (
-                      <>
-                        <div>
-                          <Label>Approved Amount</Label>
-                          <Input type="number" value={approvedAmount} onChange={(e) => setApprovedAmount(e.target.value)} />
-                        </div>
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-indigo-50 rounded-lg">
+                    <PieChart className="h-6 w-6 text-indigo-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Pending Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.pending_loans ?? 0}
+                  </p>
+                </div>
+              </div>
 
-                        <div>
-                          <Label>Interest Rate (%)</Label>
-                          <Input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
-                        </div>
+            </Card>
 
-                        <div>
-                          <Label>Notes</Label>
-                          <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                        </div>
-                      </>
-                    )}
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
 
-                    {/* Rejection Reason */}
-                    {isRejected && (
-                      <div>
-                        <Label>Rejection Reason</Label>
-                        <Textarea placeholder="Rejection Reason" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} />
-                      </div>
-                    )}
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-emerald-50 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-emerald-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Active Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.active_loans ?? 0}
+                  </p>
+                </div>
+              </div>
 
-                    {/* Activate fields */}
-                    {isActive && (
-                      <>
-                        <div className="space-y-1">
-                          <Label>Start Date</Label>
-                          <Input type="date" value={activateStartDate} onChange={(e) => setActivateStartDate(e.target.value)} />
-                        </div>
+            </Card>
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
 
-                        <div className="space-y-1">
-                          <Label>First Payment Date</Label>
-                          <Input type="date" value={activateFirstPaymentDate} onChange={(e) => setActivateFirstPaymentDate(e.target.value)} />
-                        </div>
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-amber-50 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-amber-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Total Disbursed</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : `₱${Number(loanStats?.total_disbursed ?? 0).toLocaleString()}`}
+                  </p>
+                </div>
+              </div>
 
-                        <div>
-                          <Label>Notes</Label>
-                          <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                        </div>
-                      </>
-                    )}
+            </Card>
+          </div>
+        </div>
 
-                    {/* Completed or Defaulted loans: only Notes */}
-                    {(isCompleted || isDefaulted) && (
-                      <div>
-                        <Label>Notes</Label>
-                        <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                      </div>
-                    )}
-                  </>
-                )
-              })()}
+        {/* Loans Table */}
+        <div className="px-4 sm:px-6 lg:px-8">
+          <ReusableDataTable<LoanApplication>
+            apiEndpoint="/api/loans"
+            refresh={refresh}
+            columns={columns}
+            filters={filters}
+            searchPlaceholder="Search by loan ID or borrower name..."
+            searchFields={['id', 'borrower.first_name', 'borrower.last_name']}
+            rowActions={rowActions}
+            detailsDialog={{
+              enabled: true,
+              title: "Loan Details",
+              render: renderDetailsDialog,
+            }}
+            defaultPerPage={5}
+            defaultSort={{ field: 'created_at', order: 'desc' }}
+            emptyMessage="No loans found"
+            loadingMessage="Loading loans..."
+          />
+          {/* <TestLoansTable /> */}
 
-              <Button className="w-full" onClick={handleUpdateLoan} disabled={updating}>
-                {updating ? "Updating..." : "Update Loan"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        </div>
       </main>
+
+      {/* Approve Modal */}
+      <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Approve Loan #{selectedLoan?.id || selectedLoan?.id}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label>Assign Lender (Optional)</Label>
+              <Select value={selectedLenderId?.toString() || ""} onValueChange={(val) => setSelectedLenderId(Number(val))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Lender" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lenders && lenders.length > 0 ? (
+                    lenders.map((lender, index) => {
+                      // Try different possible field names
+                      const firstName = lender.first_name || '';
+                      const lastName = lender.last_name || '';
+                      const Name = lender.last_name || '';
+                      const displayName = firstName || lastName
+                        ? `${firstName} ${lastName}`.trim()
+                        : `Lender ${index + 1}`;
+
+                      return (
+                        <SelectItem
+                          key={lender?.id || index}
+                          value={lender?.id?.toString() || index.toString()}
+                        >
+                          {displayName}
+                          {lender?.email && ` (${lender.email})`}
+                        </SelectItem>
+                      );
+                    })
+                  ) : (
+                    <SelectItem value="no-lenders" disabled>
+                      No lenders available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Approved Amount</Label>
+              <Input
+                type="number"
+                placeholder="Approved Amount"
+                value={approvedAmount}
+                onChange={(e) => setApprovedAmount(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Interest Rate (%)</Label>
+              <Input
+                type="number"
+                placeholder="Interest Rate"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value)}
+              />
+            </div>
+
+            <Button className="w-full" onClick={handleApprove} disabled={updating}>
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              {updating ? "Approving..." : "Approve"}
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setShowApproveModal(false)} variant="ghost">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Modal */}
+      <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Loan #{selectedLoan?.id || selectedLoan?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder="Rejection Reason"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+            />
+            <Button className="w-full" onClick={handleReject} variant="destructive" disabled={updating}>
+              <XCircle className="h-4 w-4 mr-2" />
+              {updating ? "Rejecting..." : "Reject"}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowRejectModal(false)} variant="ghost">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activate Modal */}
+      <Dialog open={showActivateModal} onOpenChange={setShowActivateModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Activate Loan #{selectedLoan?.id || selectedLoan?.id}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={activateStartDate}
+                onChange={(e) => setActivateStartDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>First Payment Date</Label>
+              <Input
+                type="date"
+                value={activateFirstPaymentDate}
+                onChange={(e) => setActivateFirstPaymentDate(e.target.value)}
+              />
+            </div>
+
+            <Button className="w-full" onClick={handleActivate} disabled={updating}>
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              {updating ? "Activating..." : "Activate Loan"}
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowActivateModal(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
-}
+  );
+};
+
+export default LoansManagementPage;
+

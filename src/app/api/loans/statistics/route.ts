@@ -1,21 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("Authorization")
-    const token = authHeader?.replace("Bearer ", "")
+    // Get token from HTTP-only cookie
+    const cookieStore = await cookies()
+    const token = cookieStore.get('token')?.value
 
     if (!token) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, message: `Not authenticated. Please log in again. ${cookieStore.get('token')?.value}` },
+        { status: 401 }
+      );
     }
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    // Only allow admin users
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const url = new URL(`${laravelUrl}/api/loans/statistics/user`);
 
-    const response = await fetch(`${laravelUrl}/api/loans/statistics/user`, {
+
+    const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
       },
     })
 

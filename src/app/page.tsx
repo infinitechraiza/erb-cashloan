@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '@/components/navbar';
-import { Footer } from '@/components/footer';
+import { Navbar } from '@/components/layout/navbar';
+import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -34,7 +34,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <Navbar />
 
       {/* Hero Section */}
       <section className="bg-linear-to-r from-cyan-950 to-blue-900">
@@ -109,7 +108,7 @@ export default function HomePage() {
           <Card className="border border-border p-8 rounded-2xl">
             <div className="flex items-start gap-3 mb-8">
               <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-                LH
+                L
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-foreground">

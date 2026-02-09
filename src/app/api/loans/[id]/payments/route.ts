@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Properly typed context for Next.js 15
+type RouteContext = {
+  params: Promise<{ id: string }>
+}
+
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { loanId: string } }
+  request: NextRequest, context: RouteContext
 ) {
   try {
+    const params = await context.params
+    const id = params.id
+
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
 
@@ -15,8 +22,8 @@ export async function GET(
       );
     }
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const url = `${laravelUrl}/api/loans/${params.loanId}/payments`;
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    const url = `${laravelUrl}/api/loans/${id}/payments`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -59,10 +66,12 @@ export async function GET(
 }
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: { loanId: string } }
+  request: NextRequest, context: RouteContext
 ) {
   try {
+    const params = await context.params
+    const id = params.id
+
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
 
@@ -75,10 +84,10 @@ export async function POST(
 
     const body = await request.json();
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const url = `${laravelUrl}/api/loans/${params.loanId}/payments`;
+    const url = `${laravelUrl}/api/loans/${id}/payments`;
 
     console.log('[Loan Payments API] Processing payment:', {
-      loanId: params.loanId,
+      loanId: id,
       paymentMethod: body.payment_method,
     });
 
@@ -117,7 +126,7 @@ export async function POST(
 
     const data = await response.json();
     console.log('[Loan Payments API] Payment successful');
-    
+
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     console.error('[Loan Payments API] Error:', error);

@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
     
-    console.log('[Next.js] Auth header:', authHeader ? 'Present' : 'Missing');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('[Next.js] Invalid or missing Authorization header');
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
+
+    if (!token) {
       return NextResponse.json(
-        { message: 'Unauthorized - No valid token provided' },
+        { success: false, message: 'Not authenticated. Please log in again.' },
         { status: 401 }
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    console.log('[Next.js] Token length:', token.length);
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const searchParams = request.nextUrl.searchParams;
     const queryString = searchParams.toString();
+
     const url = `${laravelUrl}/api/loans${queryString ? `?${queryString}` : ''}`;
 
     console.log('[Next.js] Fetching loans from:', url);
@@ -27,11 +34,11 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
       },
-      cache: 'no-store', // Prevent caching issues
+      cache: 'no-store',
     });
 
     console.log('[Next.js] Laravel response status:', response.status);
@@ -39,7 +46,7 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const contentType = response.headers.get('content-type');
       let error;
-      
+
       if (contentType && contentType.includes('application/json')) {
         error = await response.json();
       } else {
@@ -47,9 +54,9 @@ export async function GET(request: NextRequest) {
         console.error('[Next.js] Non-JSON error response:', text);
         error = { message: 'Invalid response from server' };
       }
-      
+
       console.error('[Next.js] Laravel error:', error);
-      
+
       return NextResponse.json(
         { message: error.message || 'Failed to fetch loans' },
         { status: response.status }
@@ -57,19 +64,25 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    console.log('[Next.js] Successfully fetched', data.loans?.length || 0, 'loans');
+
+    console.log('[Next.js] Laravel response structure:', {
+      hasData: !!data.data,
+      dataLength: data.data?.length || 0,
+      total: data.total,
+      keys: Object.keys(data)
+    });
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('[Next.js] Get loans error:', error);
-    
-    // Check if it's a connection error
+
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNREFUSED') {
       return NextResponse.json(
         { message: 'Cannot connect to Laravel backend. Make sure it is running on the configured URL.' },
         { status: 503 }
       );
     }
-    
+
     return NextResponse.json(
       { message: 'An error occurred', error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -79,25 +92,33 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
     
-    console.log('[Next.js] POST - Auth header:', authHeader ? 'Present' : 'Missing');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('[Next.js] Invalid or missing Authorization header');
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
+
+    console.log('[Next.js] POST - Token exists:', !!token);
+
+    if (!token) {
+      console.error('[Next.js] Invalid or missing token');
       return NextResponse.json(
         { message: 'Unauthorized - No valid token provided' },
         { status: 401 }
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
     console.log('[Next.js] Token length:', token.length);
-      console.log('[Next.js] Token length:', token);
 
     // Get FormData from request (this includes files)
     const formData = await request.formData();
-    
+
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const url = `${laravelUrl}/api/loans`;
 
@@ -117,9 +138,8 @@ export async function POST(request: NextRequest) {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json',
-        // DO NOT set Content-Type - let fetch set it with boundary for multipart/form-data
       },
-      body: formData, // Send FormData as-is
+      body: formData,
     });
 
     console.log('[Next.js] Laravel response status:', response.status);
@@ -127,7 +147,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const contentType = response.headers.get('content-type');
       let error;
-      
+
       if (contentType && contentType.includes('application/json')) {
         error = await response.json();
       } else {
@@ -135,12 +155,12 @@ export async function POST(request: NextRequest) {
         console.error('[Next.js] Non-JSON error response:', text);
         error = { message: 'Invalid response from server' };
       }
-      
+
       console.error('[Next.js] Laravel error response:', error);
       return NextResponse.json(
-        { 
-          message: error.message || 'Failed to create loan', 
-          errors: error.errors || {} 
+        {
+          message: error.message || 'Failed to create loan',
+          errors: error.errors || {}
         },
         { status: response.status }
       );
@@ -151,19 +171,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error('[Next.js] Create loan error:', error);
-    
-    // Check if it's a connection error
+
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNREFUSED') {
       return NextResponse.json(
         { message: 'Cannot connect to Laravel backend. Make sure it is running on http://localhost:8000' },
         { status: 503 }
       );
     }
-    
+
     return NextResponse.json(
-      { 
-        message: 'An error occurred', 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        message: 'An error occurred',
+        error: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

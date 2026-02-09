@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth-context"
-import { LenderSidebar } from "@/components/lender/lender-sidebar"
 import { AlertCircle, CheckCircle2, FileText, Download, Calendar, DollarSign, Percent, Clock, User, Briefcase } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -135,11 +134,11 @@ export default function LoanDetailsPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex">
       <div className="flex-1 lg:ml-0">
         <div className="lg:hidden h-16" />
 
-        <main className="flex-1 bg-background min-h-screen">
+        <main className="flex-1    bg-background min-h-screen">
           <header className="border-b border-border bg-card">
             <div className="px-4 sm:px-6 py-4">
               <div className="flex items-center justify-between">
