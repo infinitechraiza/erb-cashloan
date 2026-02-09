@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    // Extract Authorization header
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("[Next.js] Missing or invalid Authorization header");
-      return NextResponse.json({ message: "Unauthorized - No valid token provided" }, { status: 401 });
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
+
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    console.log("[Next.js] Token received, length:", token.length);
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: 'Not authenticated. Please log in again.' },
+        { status: 401 }
+      );
+    }
 
     // Only allow admin users
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
     const url = new URL(`${laravelUrl}/api/lenders`);
 
     // Forward query params (like ?q=searchTerm)
@@ -24,8 +35,9 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
       },
     });
 
@@ -48,6 +60,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log("[Next.js] Lenders fetched successfully:", data);
 
     return NextResponse.json(data, { status: 200 });
   } catch (error: any) {

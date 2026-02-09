@@ -1,116 +1,320 @@
 "use client"
-import { LenderSidebar } from "@/components/lender/lender-sidebar"
-import { DataTable } from "@/components/paginated-data-table"
-import { Button } from "@/components/ui/button"
-import { ColumnDef, SortingState } from "@tanstack/react-table"
-import { Eye } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
 
-interface Borrower {
+import { useState, useEffect } from "react"
+import { ReusableDataTable, ColumnDef, FilterConfig } from "@/components/data-table"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Mail, Phone, Eye, Calendar, User as UserIcon, RefreshCw, Users } from "lucide-react"
+import Image from "next/image"
+import router from "next/dist/shared/lib/router/router"
+
+interface User {
   id: number
-  first_name: string
-  last_name: string
-  email?: string
+  name: string
+  email: string
+  phone: string | null
+  profile_url: string | null
+  status: string
+  created_at: string
 }
 
-export default function LenderPaymentsPage() {
-  const router = useRouter()
-  const [data, setData] = useState<Borrower[]>([])
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [total, setTotal] = useState(0)
-  const [search, setSearch] = useState("")
-  const [sorting, setSorting] = useState<SortingState>([])
+const UserManagementPage = () => {
+  const [refresh, setRefresh] = useState(false)
 
-  const fetchData = async () => {
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Unauthorized")
+  // ✅ ADD THIS DEBUG EFFECT
 
-      const sortBy = sorting[0]?.id ?? ""
-      const sortDir = sorting[0]?.desc ? "desc" : "asc"
-
-      const query = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-        search,
-        ...(sortBy ? { sortBy, sortDir } : {}),
-      }).toString()
-
-      const res = await fetch(`/api/borrowers?${query}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to fetch borrowers")
-      }
-
-      const json = await res.json()
-      // Expecting the proxy to return the raw Laravel response, adjust if necessary
-      setData(json.data ?? [])
-      setTotal(json.total ?? json.data?.length ?? 0)
-    } catch (error) {
-      console.error("Error fetching borrowers:", error)
-    }
+  const handleRefresh = () => {
+    setRefresh(!refresh)
   }
 
-  // refetch on state changes
-  useEffect(() => {
-    fetchData()
-  }, [page, pageSize, search, sorting])
+  // Helper function for status badge
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, { className: string; label: string }> = {
+      approved: { className: "bg-green-100 text-green-800 border-green-200", label: "Approved" },
+      pending: { className: "bg-yellow-100 text-yellow-800 border-yellow-200", label: "Pending" },
+    }
+    const variant = variants[status] || variants.pending
+    return (
+      <Badge variant="outline" className={variant.className}>
+        {variant.label}
+      </Badge>
+    )
+  }
 
-  const columns: ColumnDef<Borrower>[] = [
-    { accessorKey: "first_name", header: "First Name" },
-    { accessorKey: "last_name", header: "Last Name" },
-    { accessorKey: "email", header: "Email" },
+  // Define columns
+  const columns: ColumnDef<User>[] = [
     {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => (
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/lender/borrowers/${row.original.id}`)} title="View Details">
-          <Eye className="h-4 w-4 text-blue-500" />
+      key: "profile_url",
+      label: "Profile",
+      width: "w-[100px]",
+      align: "center",
+      render: (value, user) => (
+        value ? (
+          <div className="relative w-12 h-12 rounded-full overflow-hidden mx-auto border-2 border-blue-100">
+            <Image
+              src={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${value}`}
+              alt={user.name}
+              fill
+              className="object-cover"
+            />
+          </div>
+        ) : (
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-800 to-blue-600 rounded-full flex items-center justify-center mx-auto text-white font-semibold shadow-sm">
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+        )
+      ),
+    },
+    {
+      key: "name",
+      label: "Name",
+      sortable: true,
+      width: "w-[200px]",
+      render: (value) => (
+        <div className="font-medium text-gray-900 break-words whitespace-normal">
+          {value}
+        </div>
+      ),
+    },
+    {
+      key: "email",
+      label: "Email",
+      sortable: true,
+      width: "w-[250px]",
+      render: (value) => (
+        <div className="flex items-center gap-2 text-gray-600">
+          <Mail className="h-4 w-4 text-blue-800/60 flex-shrink-0" />
+          <span className="text-sm text-center break-words whitespace-normal">{value}</span>
+        </div>
+      ),
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      width: "w-[180px]",
+      align: "center",
+      render: (value) => (
+        value ? (
+          <div className="flex items-center justify-center gap-2 text-gray-600">
+            <Phone className="h-4 w-4 text-blue-800/60 flex-shrink-0" />
+            <span className="text-sm break-words whitespace-normal">{value}</span>
+          </div>
+        ) : (
+          <span className="text-gray-400 text-sm">N/A</span>
+        )
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "w-[120px]",
+      align: "center",
+      render: (value) => getStatusBadge(value),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      width: "w-[100px]",
+      align: "center",
+      render: (value, user) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.location.href = `/lender/borrowers/${user.id}`} className="group text-blue-800 hover:bg-blue-300 hover:text-white border-none transition-all"
+        >
+          <Eye className="w-4 h-4" />
         </Button>
       ),
     },
   ]
 
-  return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <LenderSidebar />
+  // Define filters
+  const filters: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      defaultValue: "all",
+      options: [
+        { value: "all", label: "All Status" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+      ],
+    },
+  ]
 
-      {/* Main Content */}
-      <div className="flex-1 lg:ml-64 flex flex-col">
-        <header className="border-b border-border bg-card sticky top-0 z-10">
-          <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div>
-              <h1 className="text-3xl font-bold text-primary">Borrowers Management</h1>
-              <p className="text-sm text-muted-foreground mt-1">Manage and track all borrowers</p>
+  // Details dialog render
+  const renderDetailsDialog = (user: User) => (
+    <>
+      {/* Header with gradient background */}
+      <div className="bg-gradient-to-br from-blue-800 to-blue-600 px-8 py-6">
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Member Profile
+        </h2>
+        <p className="text-blue-100 text-sm">View detailed member information</p>
+      </div>
+
+      {/* Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+        {/* Profile Section */}
+        <div className="bg-white px-8 py-6 border-b border-gray-200">
+          <div className="flex items-start gap-6">
+            {/* Profile Image */}
+            <div className="flex-shrink-0">
+              {user.profile_url ? (
+                <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-blue-100 shadow-lg">
+                  <Image
+                    src={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${user.profile_url}`}
+                    alt={user.name}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-800 to-blue-600 rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Name and Status */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                {user.name}
+              </h3>
+              <div className="flex items-center gap-3">
+                {getStatusBadge(user.status)}
+                <span className="text-sm text-gray-500">
+                  Member ID: #{user.id}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Information Grid */}
+        <div className="bg-gray-50 px-8 py-6">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <UserIcon className="h-5 w-5 text-blue-800" />
+            Contact Information
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Email */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Mail className="h-5 w-5 text-blue-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email Address
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1 break-all">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Phone className="h-5 w-5 text-blue-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Phone Number
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {user.phone || 'Not provided'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Member Since */}
+            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm md:col-span-2">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="h-5 w-5 text-blue-800" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Member Since
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {new Date(user.created_at).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+
+  return (
+    <div className="flex min-h-screen bg-slate-50">
+
+      <main className="w-full flex-1 ml-0 min-h-screen pt-16 lg:pt-0">
+        {/* Header */}
+        <header className="border-b border-slate-200 bg-white sticky top-16 lg:top-0 z-40 shadow-sm">
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <Users className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-slate-900">Borrowers Management</h1>
+                </div>
+                <p className="text-slate-600">
+                  Centralized administration of accounts and roles
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleRefresh}
+                  className="flex items-center gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-          <DataTable
+        <div className="max-w-8xl mx-8 md:mx-16 lg:mx-20 xl:mx-32 py-6 xl:py-8 space-y-6">
+          <ReusableDataTable<User>
+            apiEndpoint="/api/borrowers"
+            refresh={refresh}
             columns={columns}
-            data={data}
-            pageCount={Math.ceil(total / pageSize)}
-            pageIndex={page - 1}
-            pageSize={pageSize}
-            onPageChange={(newPageIndex, newPageSize) => {
-              setPage(newPageIndex + 1)
-              setPageSize(newPageSize)
+            filters={filters}
+            searchPlaceholder="Search by name, email, or phone..."
+            searchFields={['name', 'email', 'phone']}
+            detailsDialog={{
+              enabled: false,
+              title: "Member Profile",
+              render: renderDetailsDialog,
             }}
-            search={search}
-            onSearchChange={setSearch}
-            onSortingChange={setSorting}
+            defaultPerPage={5}
+            defaultSort={{ field: 'created_at', order: 'desc' }}
+            emptyMessage="No users found"
+            loadingMessage="Loading users..."
           />
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }
+
+export default UserManagementPage

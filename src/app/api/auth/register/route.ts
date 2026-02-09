@@ -15,6 +15,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Passwords do not match" }, { status: 400 })
     }
 
+    // Validate password length
+    if (password.length < 8) {
+      return NextResponse.json({ message: "Password must be at least 8 characters" }, { status: 400 })
+    }
+
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
     const response = await fetch(`${laravelUrl}/api/auth/register`, {
@@ -28,20 +33,26 @@ export async function POST(request: NextRequest) {
         last_name: lastName,
         email,
         password,
-        password_confirmation: confirmPassword,
+        password_confirmation: confirmPassword, // ✅ Laravel expects this format
       }),
     })
 
     const data = await response.json()
 
     if (!response.ok) {
+      // Handle Laravel validation errors
+      if (data.errors) {
+        const errorMessages = Object.values(data.errors).flat().join(', ')
+        return NextResponse.json({ message: errorMessages }, { status: response.status })
+      }
       return NextResponse.json({ message: data.message || "Registration failed" }, { status: response.status })
     }
 
+    // Return success without auto-login (user should login manually)
     return NextResponse.json(
       {
+        success: true,
         message: "Registration successful",
-        token: data.token,
         user: data.user,
       },
       { status: 201 },

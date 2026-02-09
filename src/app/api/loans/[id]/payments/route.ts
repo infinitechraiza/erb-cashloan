@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+// Properly typed context for Next.js 15
+type RouteContext = {
+  params: Promise<{ id: string }>
+}
+
+export async function GET(
+  request: NextRequest, context: RouteContext
+) {
   try {
-    const { id } = await context.params
+    const params = await context.params
+    const id = params.id
+
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
 
@@ -13,7 +22,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
     const url = `${laravelUrl}/api/loans/${id}/payments`;
 
     const response = await fetch(url, {
@@ -57,11 +66,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  request: NextRequest, context: RouteContext
 ) {
   try {
-    const { id } = await context.params
+    const params = await context.params
+    const id = params.id
+
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
 

@@ -1,47 +1,77 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    // Extract token from headers
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
+    // Get token from HTTP-only cookie
+    const cookieStore = await cookies()
+    let token = cookieStore.get('token')?.value;
+
+    // If no token in cookies, try Authorization header
     if (!token) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
     }
 
-    // Laravel API base URL
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-    // Forward all query parameters dynamically
-    const queryParams = request.nextUrl.searchParams.toString();
-    const url = `${laravelUrl}/borrowers${queryParams ? `?${queryParams}` : ""}`;
+    const { searchParams } = new URL(request.url);
 
-    console.log("[Payments API] Fetching:", url);
+    const page = searchParams.get('page') || '1';
+    const perPage = searchParams.get('per_page') || '10';
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || 'all';
+    const sortBy = searchParams.get('sort_by') || '';
+    const sortOrder = searchParams.get('sort_order') || '';
 
-    // Make request to Laravel
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+    // Build query params
+    const params = new URLSearchParams({
+      page,
+      per_page: perPage,
     });
 
-    // Handle non-OK responses
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const message = errorData.message || `Laravel API returned ${response.status}`;
-      return NextResponse.json({ message }, { status: response.status });
+    if (search) params.append('search', search);
+    if (status && status !== 'all') params.append('status', status);
+    if (sortBy && sortOrder) {
+      params.append('sort_by', sortBy);
+      params.append('sort_order', sortOrder);
     }
 
-    // Parse JSON safely
-    const data = await response.json();
+    const url = `${laravelUrl}/api/borrowers?${params.toString()}`;
 
-    // Forward data to frontend
+    // ✅ Server-side logs (check your terminal)
+    console.log('🔍 [API] Fetching from Laravel:', url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      cache: 'no-store', // Prevent caching
+    });
+
+    if (!response.ok) {
+      console.error('Laravel API error:', response.status, response.statusText);
+      const errorData = await response.json().catch(() => ({}));
+      return NextResponse.json(
+        { success: false, message: errorData.message || "Failed to fetch users" },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    console.log('✅ [API] Response from Laravel:', JSON.stringify(data, null, 2));
+
     return NextResponse.json(data);
+
   } catch (error) {
-    console.error("[Payments API] Error:", error);
+    console.error("Error in Next.js API route:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Unexpected error" },
+      { success: false, message: "An error occurred while fetching users" },
       { status: 500 }
     );
   }

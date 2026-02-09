@@ -6,14 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Check, Plus, Minus, ChevronRight, Badge, Clock, Percent, ShieldCheck, CreditCard, MapPin, Phone, Mail } from 'lucide-react';
-import { Navbar } from '@/components/navbar';
-import { Footer } from '@/components/footer';
+import { Footer } from '@/components/layout/footer';
 
 export default function ContactPage() {
 
     return (
         <main className="min-h-screen bg-white">
-            <Navbar />
 
             {/* Hero Section*/}
             <section className="bg-linear-to-r from-cyan-950 to-blue-900">

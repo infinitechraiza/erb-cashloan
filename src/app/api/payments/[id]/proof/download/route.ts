@@ -1,40 +1,54 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from 'next/headers';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id: paymentId } = await params
+    const { id: paymentId } = await context.params
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
 
-    const url = `${laravelUrl}/api/payments/${paymentId}/proof/download`
-
-    const authHeader = request.headers.get("Authorization")
-
-    const token = authHeader?.replace("Bearer ", "")
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
 
     if (!token) {
-      console.warn("[DOWNLOAD PROXY] Missing auth token")
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, message: 'Not authenticated. Please log in again.' },
+        { status: 401 }
+      );
     }
+
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const url = `${laravelUrl}/api/payments/${paymentId}/proof/download`
+
+    console.log("[Download Proof API] Downloading proof for payment:", paymentId)
 
     const laravelRes = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       },
     })
 
     if (!laravelRes.ok) {
-      console.error("[DOWNLOAD PROXY] Laravel error response", laravelRes.status)
-
+      console.error("[Download Proof API] Laravel error response", laravelRes.status)
       return NextResponse.json({ message: "Failed to download file" }, { status: laravelRes.status })
     }
 
     const contentDisposition = laravelRes.headers.get("content-disposition") ?? 'attachment; filename="proof.png"'
-
     const contentType = laravelRes.headers.get("content-type") ?? "application/octet-stream"
 
     const arrayBuffer = await laravelRes.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+
+    console.log("[Download Proof API] File downloaded successfully")
 
     return new NextResponse(buffer, {
       status: 200,
@@ -44,8 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     })
   } catch (err) {
-    console.error("[DOWNLOAD PROXY] Unhandled error", err)
-
+    console.error("[Download Proof API] Unhandled error", err)
     return NextResponse.json({ message: "Server error" }, { status: 500 })
   }
 }

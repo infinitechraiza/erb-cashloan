@@ -24,6 +24,7 @@ interface Loan {
   approved_amount?: string;
   borrower?: { first_name: string; last_name: string };
   lender?: { first_name: string; last_name: string };
+  loan_officer?: { first_name: string; last_name: string };
   payments?: any[];
 }
 
@@ -223,6 +224,14 @@ export default function LoanDetailPage() {
                       <span className="text-muted-foreground">Lender:</span>
                       <span className="font-medium">
                         {loan.lender.first_name} {loan.lender.last_name}
+                      </span>
+                    </div>
+                  )}
+                  {loan.loan_officer && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Loan Officer:</span>
+                      <span className="font-medium">
+                        {loan.loan_officer.first_name} {loan.loan_officer.last_name}
                       </span>
                     </div>
                   )}

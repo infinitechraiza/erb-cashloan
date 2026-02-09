@@ -1,34 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-   const { id } = await context.params
-
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
+    // Await params in Next.js 15+
+    const params = await context.params
+    const { id } = params
 
-    if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
-    // Fetch all loans for borrower
-    const response = await fetch(`${laravelUrl}/api/loans?borrower_id=${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const text = await response.text();
-    if (!response.ok) {
-      return NextResponse.json({ message: text || 'Failed to fetch loans' }, { status: response.status });
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
     }
 
-    const data = JSON.parse(text);
-    return NextResponse.json(data);
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: 'Not authenticated. Please log in again.' },
+        { status: 401 }
+      );
+    }
+
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    const response = await fetch(`${laravelUrl}/api/loans/${id}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    // Get the response text first
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      // Try to parse as JSON, but handle HTML error responses
+      let errorMessage = 'Failed to fetch loan';
+
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // If it's HTML, extract useful info from status
+        console.error('[v0] Laravel returned HTML error:', responseText.substring(0, 500));
+
+        if (response.status === 404) {
+          errorMessage = 'Loan not found';
+        } else if (response.status === 403) {
+          errorMessage = 'You do not have permission to view this loan';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error occurred. Please check your Laravel logs.';
+        }
+      }
+
+      return NextResponse.json(
+        { message: errorMessage },
+        { status: response.status }
+      );
+    }
+
+    // Parse successful response
+    try {
+      const data = JSON.parse(responseText);
+      return NextResponse.json(data);
+    } catch (e) {
+      console.error('[v0] Failed to parse successful response:', responseText.substring(0, 500));
+      return NextResponse.json(
+        { message: 'Invalid response from server' },
+        { status: 500 }
+      );
+    }
+
+  } catch (error) {
+    console.error('[v0] Get loan error:', error);
+    return NextResponse.json(
+      { message: 'An error occurred while fetching loan details' },
+      { status: 500 }
+    );
   }
 }
-
 
 export async function PUT(
   request: NextRequest,
@@ -67,14 +127,14 @@ export async function PUT(
     if (!response.ok) {
       // Try to parse as JSON, but handle HTML error responses
       let errorMessage = 'Failed to update loan';
-      
+
       try {
         const errorData = JSON.parse(responseText);
         errorMessage = errorData.message || errorMessage;
       } catch (e) {
         // If it's HTML, extract useful info from status
         console.error('[v0] Laravel returned HTML error:', responseText.substring(0, 500));
-        
+
         if (response.status === 404) {
           errorMessage = 'Loan not found';
         } else if (response.status === 403) {

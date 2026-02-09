@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { FileText, Download, ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
 
 interface Loan {
   id: number
@@ -23,8 +22,6 @@ interface Loan {
   rejection_reason?: string
   start_date?: string
   first_payment_date?: string
-  approved_at?: string
-  disbursement_date?: string
   outstanding_balance?: string
   created_at: string
   updated_at: string
@@ -77,7 +74,7 @@ export default function LoanDetailPage() {
         if (!res.ok) throw new Error("Failed to load loan")
 
         const data = await res.json()
-        setLoan(data.loans[0] || data.loans || data)
+        setLoan(data.loan)
       } catch {
         toast.error("Failed to load loan details")
         router.push("/admin/loans")
@@ -88,7 +85,7 @@ export default function LoanDetailPage() {
 
     fetchLoan()
   }, [id, router])
-  console.log("saved loans", loan)
+
   const downloadDocument = async (docId: number, fileName?: string) => {
     setDownloading(docId)
     try {
@@ -124,154 +121,75 @@ export default function LoanDetailPage() {
   return (
     <div className="flex">
       {/* Sidebar */}
-      <AdminSidebar />
 
       {/* Main content */}
-      <main className="flex-1 ml-64 bg-background min-h-screen">
+     <main className="flex-1    bg-background min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-40 border-b bg-card">
-          <div className="px-8 py-6 max-w-7xl mx-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Loan Details</h1>
-                <p className="text-muted-foreground mt-1">Loan #{loan.id}</p>
-              </div>
-
-              <Badge className={statusColors[loan.status] || "bg-gray-100"}>{loan.status}</Badge>
-            </div>
+        <header className="sticky top-0 z-40 border-b border-border bg-card">
+          <div className="px-8 py-6 max-w-6xl mx-auto">
+            <h1 className="text-3xl font-bold text-primary">User Management</h1>
+            <p className="text-muted-foreground mt-1">Centralized administration of accounts and roles</p>
           </div>
         </header>
 
-        <div className="px-8 py-8 max-w-7xl mx-auto space-y-8">
-          {/* Back */}
-          <Button onClick={() => router.back()} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
+        {/* Page content */}
+        <div className="px-8 py-8 max-w-6xl mx-auto space-y-6">
+          {/* Top controls */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <Button onClick={() => router.back()} className="flex items-center">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
 
-          {/* Loan Overview */}
-          <Card className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Loan Overview</h2>
+            {loan?.status && <Badge className={statusColors[loan.status] || "bg-gray-100 text-gray-700"}>{loan.status}</Badge>}
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Loan Type</p>
-                <p className="font-medium capitalize">{loan.type}</p>
-              </div>
+          {/* Borrower & Loan */}
+          <Card className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-semibold mb-2">Borrower</h3>
+              <p>
+                {loan?.borrower?.first_name} {loan?.borrower?.last_name}
+              </p>
+              <p className="text-sm text-muted-foreground">{loan?.borrower?.email || "-"}</p>
+            </div>
 
-              <div>
-                <p className="text-sm text-muted-foreground">Term</p>
-                <p className="font-medium">{loan.term_months} months</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Outstanding Balance</p>
-                <p className="font-semibold">₱{Number(loan.outstanding_balance ?? 0).toLocaleString()}</p>
-              </div>
+            <div>
+              <h3 className="font-semibold mb-2">Loan</h3>
+              <p>Type: {loan?.type}</p>
+              <p>Requested: ₱{Number(loan?.principal_amount ?? 0).toLocaleString()}</p>
+              <p>Approved: {loan?.approved_amount ? `₱${Number(loan.approved_amount).toLocaleString()}` : "-"}</p>
+              <p>Rate: {loan?.interest_rate}%</p>
+              <p>Term: {loan?.term_months ?? "-"} months</p>
             </div>
           </Card>
 
-          {/* People */}
-          <Card className="p-6 space-y-6">
-            <h2 className="text-lg font-semibold">People Involved</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Borrower</p>
-                <p className="font-medium">
-                  {loan.borrower?.first_name} {loan.borrower?.last_name}
-                </p>
-                <p className="text-sm text-muted-foreground">{loan.borrower?.email || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Lender</p>
-                <p className="font-medium">{loan.lender ? `${loan.lender.first_name} ${loan.lender.last_name}` : "-"}</p>
-                <p className="text-sm text-muted-foreground">{loan.lender?.email || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Loan Officer</p>
-                <p className="font-medium">{loan.loan_officer ? `${loan.loan_officer.first_name} ${loan.loan_officer.last_name}` : "-"}</p>
-                <p className="text-sm text-muted-foreground">{loan.loan_officer?.email || "-"}</p>
-              </div>
+          {/* Dates & Notes */}
+          <Card className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-semibold mb-2">Dates</h3>
+              <p>Start: {loan?.start_date || "-"}</p>
+              <p>First Payment: {loan?.first_payment_date || "-"}</p>
+              <p>Created: {loan?.created_at ? new Date(loan.created_at).toLocaleString() : "-"}</p>
             </div>
-          </Card>
 
-          {/* Financial Details */}
-          <Card className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Financial Details</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Principal Amount</p>
-                <p className="font-medium">₱{Number(loan.principal_amount).toLocaleString()}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Approved Amount</p>
-                <p className="font-medium">{loan.approved_amount ? `₱${Number(loan.approved_amount).toLocaleString()}` : "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Interest Rate</p>
-                <p className="font-medium">{loan.interest_rate}%</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Status</p>
-                <p className="font-medium capitalize">{loan.status}</p>
-              </div>
+            <div>
+              <h3 className="font-semibold mb-2">Notes</h3>
+              <p>{loan?.notes || "-"}</p>
+              {loan?.rejection_reason && <p className="text-red-600">{loan.rejection_reason}</p>}
             </div>
-          </Card>
-
-          {/* Dates */}
-          <Card className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Timeline</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Created At</p>
-                <p className="font-medium">{loan.created_at ? new Date(loan.created_at).toLocaleDateString() : "-"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Approved At</p>
-                <p className="font-medium">{loan.approved_at ? new Date(loan.approved_at).toLocaleDateString() : "-"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Disbursement Date</p>
-                <p className="font-medium">{loan.disbursement_date ? new Date(loan.disbursement_date).toLocaleDateString() : "-"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Start Date</p>
-                <p className="font-medium">{loan.start_date ? new Date(loan.start_date).toLocaleDateString() : "-"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">First Payment Date</p>
-                <p className="font-medium">{loan.first_payment_date ? new Date(loan.first_payment_date).toLocaleDateString() : "-"}</p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Notes */}
-          <Card className="p-6 space-y-3">
-            <h2 className="text-lg font-semibold">Notes & Decisions</h2>
-
-            <p className="text-sm leading-relaxed">{loan.notes || "No notes provided."}</p>
-
-            {loan.rejection_reason && <p className="text-sm text-red-600">Rejection Reason: {loan.rejection_reason}</p>}
           </Card>
 
           {/* Documents */}
-          {(loan?.documents && loan?.documents?.length > 0) && (
-            <Card className="p-6 space-y-4 gap-0">
-              <h2 className="text-lg font-semibold">Documents</h2>
+          {loan?.documents?.length ? (
+            <Card className="p-6 space-y-3">
+              <h3 className="font-semibold">Documents</h3>
 
               {loan.documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between border rounded-lg p-3">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{doc.name || doc.file_name}</span>
+                <div key={doc.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    <span>{doc.name || doc.file_name}</span>
                   </div>
 
                   <Button size="sm" variant="outline" disabled={downloading === doc.id} onClick={() => downloadDocument(doc.id, doc.file_name)}>
@@ -280,7 +198,7 @@ export default function LoanDetailPage() {
                 </div>
               ))}
             </Card>
-          )}
+          ) : null}
         </div>
       </main>
     </div>

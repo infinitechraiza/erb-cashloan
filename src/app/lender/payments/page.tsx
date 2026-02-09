@@ -1,17 +1,15 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, CheckCheckIcon, CheckCircle, Download, Eye, XCircle } from "lucide-react"
+import { AlertCircle, CheckCheckIcon, CheckCircle, Download, Eye, XCircle, User as UserIcon } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
-import { ColumnDef } from "@tanstack/react-table"
-import { DataTable } from "@/components/paginated-data-table"
+import { ReusableDataTable, ColumnDef, FilterConfig } from "@/components/data-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { LenderSidebar } from "@/components/lender/lender-sidebar"
 import { toast } from "sonner"
-import Image from "next/image"
+import { api, authenticatedFetch } from "@/lib/auth" // Import the utilities
 
 interface Loan {
   id: number
@@ -54,7 +52,6 @@ interface Loan {
     id: number
     name?: string
     file_name?: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any
   }>
 }
@@ -78,159 +75,75 @@ interface Payment {
   proof_of_payment?: string
   verified_at?: string
   updated_at?: string
+}
 
+interface VerifyPaymentResponse {
+  message: string
+  payment: Payment
 }
 
 export default function LenderPaymentsPage() {
   const router = useRouter()
   const { authenticated, loading: authLoading } = useAuth()
-  const requestIdRef = useRef(0)
 
-  const [payments, setPayments] = useState<Payment[]>([])
   const [error, setError] = useState("")
-
-  const [search, setSearch] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-
-  const [filterType, setFilterType] = useState<"all" | "upcoming" | "overdue" | "paid">("all")
-
-  const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: 10,
-    total: 0,
-  })
-
-  const [sorting, setSorting] = useState<{ column: string; order: "asc" | "desc" }>({
-    column: "due_date",
-    order: "asc",
-  })
-
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [fetching, setFetching] = useState(false)
+  const [refresh, setRefresh] = useState(false)
 
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
   const [viewPaymentOpen, setViewPaymentOpen] = useState(false)
-  const [verifyPaymentOpen, setVerifyPaymentOpen] = useState(false)
   const [verifyActionLoading, setVerifyActionLoading] = useState(false)
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
   const [rejectReasonOpen, setRejectReasonOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400)
-    return () => clearTimeout(t)
-  }, [search])
-
-  // Reset page when search/filter changes
-  useEffect(() => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }))
-  }, [debouncedSearch, filterType])
-
-  const fetchPayments = async () => {
-    const requestId = ++requestIdRef.current
-
-    if (typeof pagination.pageIndex !== "number" || typeof pagination.pageSize !== "number") return
-
-    setInitialLoading((prev) => prev || true)
-    setFetching(true)
-
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) throw new Error("Unauthorized")
-
-      const params = new URLSearchParams()
-      params.set("type", filterType)
-      params.set("page", String(pagination.pageIndex + 1))
-      params.set("per_page", String(pagination.pageSize))
-      if (debouncedSearch) params.set("search", debouncedSearch)
-      if (sorting?.column) {
-        params.set("sort_column", sorting.column)
-        params.set("sort_order", sorting.order)
-      }
-
-      const res = await fetch(`/api/payments?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "Failed to fetch payments")
-
-      if (requestId !== requestIdRef.current) return
-
-      setPayments(data.data ?? [])
-      setPagination({
-        pageIndex: data.current_page - 1,
-        pageSize: data.per_page,
-        total: data.total,
-      })
-    } catch (err) {
-      if (requestId === requestIdRef.current) {
-        setError(err instanceof Error ? err.message : "Failed to load payments")
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setInitialLoading(false)
-        setFetching(false)
-      }
-    }
-  }
 
   useEffect(() => {
     if (!authenticated && !authLoading) {
       router.push("/")
       return
     }
-    if (authenticated) fetchPayments()
-  }, [authenticated, authLoading, debouncedSearch, filterType, pagination.pageIndex, pagination.pageSize, sorting.column, sorting.order])
+  }, [authenticated, authLoading, router])
 
+  const handleRefresh = () => {
+    setRefresh(!refresh)
+  }
+
+  // REFACTORED: Using the new api utility
   const handleVerifyPayment = async (action: "approve" | "reject", reason?: string) => {
     if (!selectedPayment) return
     setVerifyActionLoading(true)
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch(`/api/payments/${selectedPayment.id}/verify`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason: action === "reject" ? reason : undefined }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "Failed to verify payment")
-      // Close modal BEFORE fetching new data to prevent re-opening
-      setVerifyPaymentOpen(false)
-      setSelectedPayment(null)
-      fetchPayments()
-      setVerifyPaymentOpen(false)
+      const data = await api.post<VerifyPaymentResponse>(
+        `/api/payments/${selectedPayment.id}/verify`,
+        { action, reason: action === "reject" ? reason : undefined },
+        router
+      )
+      
       setViewPaymentOpen(false)
-      toast.success(`Payment ${action === "approve" ? "approved" : "rejected"} successfully`)
+      setSelectedPayment(null)
+      handleRefresh()
+      toast.success(data.message || `Payment ${action === "approve" ? "approved" : "rejected"} successfully`)
     } catch (err) {
       console.error(err)
-      alert(err instanceof Error ? err.message : "Failed to verify")
+      toast.error(err instanceof Error ? err.message : "Failed to verify")
     } finally {
       setVerifyActionLoading(false)
     }
   }
 
-  // Inside your component
+  // REFACTORED: Using authenticatedFetch for file downloads
   const downloadFile = async (paymentId: string) => {
     try {
-      const token = localStorage.getItem("token")
       if (!paymentId) throw new Error("Invalid payment ID")
-      if (!token) throw new Error("Unauthorized")
 
-      // Proxy URL in Next.js
       const proxyUrl = `/api/payments/${paymentId}/proof/download`
 
-      const res = await fetch(proxyUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`, // include the token here
-        },
-      })
-      if (!res.ok) throw new Error("Failed to fetch file")
+      const response = await authenticatedFetch(proxyUrl, { method: 'GET' }, router)
+      
+      if (!response.ok) throw new Error("Failed to fetch file")
 
-      const blob = await res.blob()
+      const blob = await response.blob()
 
-      // Extract filename from content-disposition header if present
-      const disposition = res.headers.get("content-disposition")
+      const disposition = response.headers.get("content-disposition")
       let fileName = "proof.png"
 
       if (disposition?.includes("filename=")) {
@@ -238,7 +151,6 @@ export default function LenderPaymentsPage() {
         if (match && match[1]) fileName = match[1]
       }
 
-      // Create temporary link to trigger download
       const link = document.createElement("a")
       link.href = URL.createObjectURL(blob)
       link.download = fileName
@@ -253,104 +165,156 @@ export default function LenderPaymentsPage() {
     }
   }
 
-  const columns = useMemo<ColumnDef<Payment>[]>(
-    () => [
-      { accessorKey: "id", header: "ID" },
-      { accessorKey: "transaction_id", header: "Transaction #" },
-      {
-        id: "borrower",
-        header: "Borrower",
-        accessorFn: (row) => row.loan?.borrower?.name || "-",
-      },
-      {
-        id: "email",
-        header: "Email",
-        accessorFn: (row) => row.loan?.borrower?.email || "-",
-      },
-      {
-        accessorKey: "loan_id",
-        header: "Loan #",
-      },
-      {
-        accessorKey: "amount",
-        header: "Amount",
-        cell: (v) => `₱${Number(v.getValue()).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-      },
-      {
-        accessorKey: "due_date",
-        header: "Due Date",
-        cell: (v) => new Date(v.getValue() as string).toLocaleDateString(),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: (v) => {
-          const rawStatus = (v.getValue() as string)?.toLowerCase()
+  // Define columns for ReusableDataTable
+  const columns: ColumnDef<Payment>[] = [
+    {
+      key: "id",
+      label: "ID",
+      sortable: true,
+      width: "w-[80px]",
+      render: (value) => <span className="font-medium">#{value}</span>,
+    },
+    {
+      key: "transaction_id",
+      label: "Transaction #",
+      sortable: true,
+      width: "w-[140px]",
+      render: (value) => <span className="font-mono text-sm">{value}</span>,
+    },
+    {
+      key: "loan.borrower.name",
+      label: "Borrower",
+      width: "w-[150px]",
+      render: (value, row) => row.loan?.borrower?.name || "-",
+    },
+    {
+      key: "loan.borrower.email",
+      label: "Email",
+      width: "w-[180px]",
+      render: (value, row) => row.loan?.borrower?.email || "-",
+    },
+    {
+      key: "loan_id",
+      label: "Loan #",
+      sortable: true,
+      width: "w-[100px]",
+      render: (value) => <span className="font-medium">#{value}</span>,
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      sortable: true,
+      width: "w-[120px]",
+      align: "right",
+      render: (value) => (
+        <span className="font-semibold">
+          ₱{Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      key: "due_date",
+      label: "Due Date",
+      sortable: true,
+      width: "w-[120px]",
+      render: (value) => new Date(value as string).toLocaleDateString(),
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      width: "w-[160px]",
+      align: "center",
+      render: (value) => {
+        const rawStatus = (value as string)?.toLowerCase()
 
-          // Map to human-readable label
-          const statusLabels: Record<string, string> = {
-            paid: "Paid",
-            pending: "Pending",
-            late: "Late",
-            missed: "Missed",
-            awaiting_verification: "Awaiting Verification",
-            rejected: "Rejected",
-          }
+        const statusLabels: Record<string, string> = {
+          paid: "Paid",
+          pending: "Pending",
+          late: "Late",
+          missed: "Missed",
+          awaiting_verification: "Awaiting Verification",
+          rejected: "Rejected",
+        }
 
-          const statusStyles: Record<string, string> = {
-            paid: "bg-green-100 text-green-800",
-            pending: "bg-yellow-100 text-yellow-800",
-            late: "bg-orange-100 text-orange-800",
-            missed: "bg-red-100 text-red-800",
-            awaiting_verification: "bg-yellow-200 text-yellow-800",
-            rejected: "bg-red-100 text-red-800",
-          }
+        const statusStyles: Record<string, string> = {
+          paid: "bg-green-100 text-green-800",
+          pending: "bg-yellow-100 text-yellow-800",
+          late: "bg-orange-100 text-orange-800",
+          missed: "bg-red-100 text-red-800",
+          awaiting_verification: "bg-yellow-200 text-yellow-800",
+          rejected: "bg-red-100 text-red-800",
+        }
 
-          const label = statusLabels[rawStatus] ?? rawStatus
-          const cls = statusStyles[rawStatus] ?? "bg-gray-100 text-gray-800"
+        const label = statusLabels[rawStatus] ?? rawStatus
+        const cls = statusStyles[rawStatus] ?? "bg-gray-100 text-gray-800"
 
-          return <Badge className={`${cls} px-2 py-1 rounded-full text-xs`}>{label}</Badge>
-        },
+        return <Badge variant="outline" className={`${cls} px-2 py-1`}>{label}</Badge>
       },
-      {
-        id: "actions",
-        header: "Actions",
-        cell: ({ row }) => (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedPayment(row.original)
-                setViewPaymentOpen(true)
-              }}
-              title={row.original.status !== "awaiting_verification" ? "View Details" : "Verify Payment"}
-            >
-              {row.original.status !== "awaiting_verification" ? (
-                <Eye className="h-4 w-4 text-blue-500" />
-              ) : (
-                <CheckCheckIcon className="h-4 w-4 text-slate-800" />
-              )}
-            </Button>
-          </>
-        ),
-      },
-    ],
-    [],
+    },
+  ]
+
+  // Define filters
+  const filters: FilterConfig[] = [
+    {
+      key: "type",
+      label: "Type",
+      type: "select",
+      defaultValue: "all",
+      options: [
+        { value: "all", label: "All" },
+        { value: "upcoming", label: "Upcoming" },
+        { value: "overdue", label: "Overdue" },
+        { value: "awaiting_verification", label: "Awaiting Verification" },
+        { value: "rejected", label: "Rejected" },
+        { value: "paid", label: "Paid" },
+      ],
+    },
+  ]
+
+  // Row actions
+  const rowActions = (payment: Payment) => (
+    <div className="flex items-center gap-2 justify-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setSelectedPayment(payment)
+          setViewPaymentOpen(true)
+        }}
+        title={payment.status !== "awaiting_verification" ? "View Details" : "Verify Payment"}
+      >
+        {payment.status !== "awaiting_verification" ? (
+          <Eye className="h-4 w-4 text-blue-500" />
+        ) : (
+          <CheckCheckIcon className="h-4 w-4 text-slate-800" />
+        )}
+      </Button>
+    </div>
   )
 
-  if (authLoading || initialLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
+            <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Verifying authentication...</p>
+        </div>
+      </div>
+    )
   }
 
-  console.log(payments)
+  // Don't render anything if not authenticated (redirect will happen in useEffect)
+  if (!authenticated) {
+    return null
+  }
+
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <LenderSidebar />
-
-      {/* Main Content */}
-      <div className="flex-1 lg:ml-64 flex flex-col">
+      <div className="w-full flex-1 flex flex-col">
         <header className="border-b border-border bg-card sticky top-0 z-10">
           <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
@@ -361,36 +325,6 @@ export default function LenderPaymentsPage() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex gap-2 flex-wrap">
-              {["all", "upcoming", "overdue", "awaiting_verification", "rejected", "paid"].map((t) => {
-                // Map to human-readable label
-                const labelMap: Record<string, string> = {
-                  all: "All",
-                  upcoming: "Upcoming",
-                  overdue: "Overdue",
-                  awaiting_verification: "Awaiting Verification",
-                  rejected: "Rejected",
-                  paid: "Paid",
-                }
-
-                return (
-                  <Button
-                    key={t}
-                    size="sm"
-                    variant={filterType === t ? "default" : "outline"}
-                    className="capitalize"
-                    onClick={() => setFilterType(t as any)}
-                  >
-                    {labelMap[t] ?? t}
-                  </Button>
-                )
-              })}
-            </div>
-            {fetching && <span className="text-xs text-muted-foreground">Updating results…</span>}
-          </div>
-
           {/* Error */}
           {error && (
             <div className="p-3 bg-red-50 text-red-700 border rounded flex gap-2">
@@ -399,198 +333,389 @@ export default function LenderPaymentsPage() {
             </div>
           )}
 
-          {/* Table */}
-          <DataTable
+          {/* Table with Filters */}
+          <ReusableDataTable<Payment>
+            apiEndpoint="/api/payments"
+            refresh={refresh}
             columns={columns}
-            data={payments}
-            pageCount={Math.ceil(pagination.total / pagination.pageSize)}
-            pageIndex={pagination.pageIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={(pageIndex, pageSize) =>
-              setPagination((p) => ({
-                pageIndex,
-                pageSize: pageSize ?? p.pageSize,
-                total: p.total,
-              }))
-            }
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search payments, borrower, loan #"
-            onSortingChange={(s) => {
-              const x = s[0]
-              if (x)
-                setSorting({
-                  column: x.id,
-                  order: x.desc ? "desc" : "asc",
-                })
-            }}
+            filters={filters}
+            searchPlaceholder="Search payments, borrower, loan #..."
+            searchFields={['transaction_id', 'loan.borrower.name', 'loan_id']}
+            rowActions={rowActions}
+            defaultPerPage={10}
+            defaultSort={{ field: 'due_date', order: 'asc' }}
+            emptyMessage="No payments found"
+            loadingMessage="Loading payments..."
           />
         </main>
       </div>
 
-      {/* Verify Payment Dialog */}
+      {/* View Payment Dialog - IMPROVED DESIGN */}
       <Dialog open={viewPaymentOpen} onOpenChange={setViewPaymentOpen}>
-        <DialogContent className="h-[90vh] max-w-md overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold items-center justify-between">
-              <p>Payment Details — Loan #{selectedPayment?.id ?? "-"}</p>
-              <p className="text-xs text-gray-500">{selectedPayment?.transaction_id ?? "-"}</p>
-            </DialogTitle>
-          </DialogHeader>
-
-          {/* Loan Summary Card */}
-          <div className="border rounded-md p-4 bg-slate-50">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Loan Summary</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-gray-600">Status</p>
-                <p className="font-medium capitalize">{selectedPayment?.loan?.status}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Type</p>
-                <p className="font-medium capitalize">{selectedPayment?.loan?.type}</p>
-              </div>
-
-              <div>
-                <p className="text-gray-600">Approved Amount</p>
-                <p className="font-medium text-green-700">₱{parseFloat(selectedPayment?.loan?.approved_amount ?? "0").toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Outstanding</p>
-                <p className="font-medium text-red-600">₱{parseFloat(selectedPayment?.loan?.outstanding_balance ?? "0").toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Interest Rate</p>
-                <p className="font-medium">{selectedPayment?.loan?.interest_rate}%</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Term</p>
-                <p className="font-medium">{selectedPayment?.loan?.term_months} months</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-600">Purpose</p>
-                <p className="font-medium truncate">{selectedPayment?.loan?.purpose}</p>
-              </div>
+        <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+          {/* Header with gradient background */}
+          <div className="bg-gradient-to-br from-blue-800 to-blue-600 px-8 py-6">
+            <h2 className="text-2xl font-bold text-white mb-2">
+              Payment Details
+            </h2>
+            <div className="flex items-center gap-3 text-blue-50">
+              <span className="text-sm">Loan #{selectedPayment?.loan_id}</span>
+              <span className="text-blue-300">•</span>
+              <span className="text-sm font-mono">{selectedPayment?.transaction_id}</span>
             </div>
           </div>
 
-          {/* Borrower Info Card */}
-          <div className="border rounded-md p-4 bg-white">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Borrower</h3>
-            <p className="text-sm">
-              <span className="text-gray-600">Name: </span>
-              <span className="font-medium">{selectedPayment?.loan?.borrower?.name ?? "-"}</span>
-            </p>
-            <p className="text-sm">
-              <span className="text-gray-600">Email: </span>
-              <span className="font-medium">{selectedPayment?.loan?.borrower?.email ?? "-"}</span>
-            </p>
-          </div>
-
-          {/* Payment Summary Card */}
-          <div className="border rounded-md p-4 bg-white">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Payment</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-gray-600">Amount</p>
-                <p className="font-medium text-green-800">₱{parseFloat(selectedPayment?.amount ?? "0").toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Late Fee</p>
-                <p className="font-medium text-red-600">₱{parseFloat(selectedPayment?.late_fee ?? "0").toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Days Late</p>
-                <p className="font-medium">{selectedPayment?.days_late}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Due Date</p>
-                <p className="font-medium">{new Date(selectedPayment?.due_date ?? "-").toLocaleDateString()}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-600">Status</p>
-                <p className="font-medium capitalize">{selectedPayment?.status}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Transaction Info Card */}
-          <div className="border rounded-md p-4 bg-white">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Transaction</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-gray-600">Method</p>
-                <p className="font-medium capitalize">{selectedPayment?.payment_method ?? "-"}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Payment Date</p>
-                <p className="font-medium">{selectedPayment?.payment_date ? new Date(selectedPayment?.payment_date).toLocaleDateString() : "-"}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Paid Date</p>
-                <p className="font-medium">{selectedPayment?.paid_date ? new Date(selectedPayment?.paid_date).toLocaleDateString() : "-"}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-600">Notes</p>
-                <p className="font-medium">
-                  {selectedPayment?.notes ? `| ${selectedPayment?.notes}` : ""}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Proof of Payment */}
-          {selectedPayment?.proof_of_payment && (
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-500 mb-2">Proof of Payment</h4>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <p className="font-medium">{selectedPayment.proof_of_payment.split("/").pop()}</p>
-                    <p className="text-sm text-muted-foreground">Proof of Payment</p>
+          {/* Content */}
+          <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+            {/* Status Banner */}
+            <div className="bg-white px-8 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Payment Status
+                  </label>
+                  <div className="mt-1">
+                    {(() => {
+                      const rawStatus = selectedPayment?.status?.toLowerCase() || ""
+                      const statusLabels: Record<string, string> = {
+                        paid: "Paid",
+                        pending: "Pending",
+                        late: "Late",
+                        missed: "Missed",
+                        awaiting_verification: "Awaiting Verification",
+                        rejected: "Rejected",
+                      }
+                      const statusStyles: Record<string, string> = {
+                        paid: "bg-green-100 text-green-800 border-green-200",
+                        pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
+                        late: "bg-orange-100 text-orange-800 border-orange-200",
+                        missed: "bg-red-100 text-red-800 border-red-200",
+                        awaiting_verification: "bg-yellow-200 text-yellow-800 border-yellow-300",
+                        rejected: "bg-red-100 text-red-800 border-red-200",
+                      }
+                      const label = statusLabels[rawStatus] ?? rawStatus
+                      const cls = statusStyles[rawStatus] ?? "bg-gray-100 text-gray-800 border-gray-200"
+                      return <Badge variant="outline" className={`${cls} px-3 py-1`}>{label}</Badge>
+                    })()}
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => downloadFile(String(selectedPayment.id))}>
-                  <Download className="h-4 w-4" />
-                </Button>
+                <div className="text-right">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Payment Amount
+                  </label>
+                  <p className="text-2xl font-bold text-green-700 mt-1">
+                    ₱{parseFloat(selectedPayment?.amount ?? "0").toLocaleString()}
+                  </p>
+                </div>
               </div>
             </div>
-          )}
 
-          <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-            <div>
-              <p className="text-gray-600">Verified At</p>
-              <p className="font-medium">{selectedPayment?.verified_at ? new Date(selectedPayment.verified_at).toLocaleString() : "-"}</p>
+            {/* Payment Information */}
+            <div className="bg-gray-50 px-8 py-6 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-blue-800" />
+                Payment Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Due Date */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Due Date
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {new Date(selectedPayment?.due_date ?? "-").toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+
+                {/* Late Fee */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Late Fee
+                  </label>
+                  <p className="text-sm font-medium text-red-600 mt-1">
+                    ₱{parseFloat(selectedPayment?.late_fee ?? "0").toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Days Late */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Days Late
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.days_late || "0"} days
+                  </p>
+                </div>
+
+                {/* Payment Method */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Payment Method
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1 capitalize">
+                    {selectedPayment?.payment_method ?? "-"}
+                  </p>
+                </div>
+
+                {/* Payment Date */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Payment Date
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.payment_date ? new Date(selectedPayment?.payment_date).toLocaleDateString() : "-"}
+                  </p>
+                </div>
+
+                {/* Paid Date */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Paid Date
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.paid_date ? new Date(selectedPayment?.paid_date).toLocaleDateString() : "-"}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="col-span-2">
-              <p className="text-gray-600">Rejection Reason</p>
-              <p className="font-medium">{selectedPayment?.rejection_reason ?? "-"}</p>
+
+            {/* Borrower Information */}
+            <div className="bg-white px-8 py-6 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <UserIcon className="h-5 w-5 text-blue-800" />
+                Borrower Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Name */}
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Borrower Name
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.loan?.borrower?.name ?? "-"}
+                  </p>
+                </div>
+
+                {/* Email */}
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email Address
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1 break-all">
+                    {selectedPayment?.loan?.borrower?.email ?? "-"}
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* Loan Summary */}
+            <div className="bg-gray-50 px-8 py-6 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                Loan Summary
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Loan Status */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Loan Status
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1 capitalize">
+                    {selectedPayment?.loan?.status}
+                  </p>
+                </div>
+
+                {/* Loan Type */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Loan Type
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1 capitalize">
+                    {selectedPayment?.loan?.type}
+                  </p>
+                </div>
+
+                {/* Interest Rate */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Interest Rate
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.loan?.interest_rate}%
+                  </p>
+                </div>
+
+                {/* Approved Amount */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Approved Amount
+                  </label>
+                  <p className="text-sm font-medium text-green-700 mt-1">
+                    ₱{parseFloat(selectedPayment?.loan?.approved_amount ?? "0").toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Outstanding Balance */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Outstanding Balance
+                  </label>
+                  <p className="text-sm font-medium text-red-600 mt-1">
+                    ₱{parseFloat(selectedPayment?.loan?.outstanding_balance ?? "0").toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Term */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Term
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.loan?.term_months} months
+                  </p>
+                </div>
+
+                {/* Purpose */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm md:col-span-3">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Purpose
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedPayment?.loan?.purpose || "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Proof of Payment */}
+            {selectedPayment?.proof_of_payment && (
+              <div className="bg-white px-8 py-6 border-b border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Download className="h-5 w-5 text-blue-800" />
+                  Proof of Payment
+                </h4>
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Download className="h-5 w-5 text-blue-800" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {selectedPayment.proof_of_payment.split("/").pop()}
+                        </p>
+                        <p className="text-sm text-gray-600">Uploaded proof of payment</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => downloadFile(String(selectedPayment.id))}
+                      className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Information */}
+            <div className="bg-gray-50 px-8 py-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                Additional Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Verified At */}
+                {selectedPayment?.verified_at && (
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Verified At
+                    </label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {new Date(selectedPayment.verified_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                {/* Created At */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {new Date(selectedPayment?.created_at ?? "0").toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Updated At */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Updated At
+                  </label>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {new Date(selectedPayment?.updated_at ?? "0").toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Notes */}
+                {selectedPayment?.notes && (
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm md:col-span-2">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notes
+                    </label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {selectedPayment.notes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Rejection Reason */}
+                {selectedPayment?.rejection_reason && (
+                  <div className="bg-red-50 rounded-lg p-4 border border-red-200 shadow-sm md:col-span-2">
+                    <label className="text-xs font-medium text-red-500 uppercase tracking-wider">
+                      Rejection Reason
+                    </label>
+                    <p className="text-sm font-medium text-red-900 mt-1">
+                      {selectedPayment.rejection_reason}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            {selectedPayment?.status === "awaiting_verification" && (
+              <div className="bg-white px-8 py-6 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button 
+                    className="flex-1 bg-green-600 hover:bg-green-700" 
+                    onClick={() => setApproveConfirmOpen(true)} 
+                    disabled={verifyActionLoading}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" /> Approve Payment
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    className="flex-1" 
+                    onClick={() => setRejectReasonOpen(true)} 
+                    disabled={verifyActionLoading}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Reject Payment
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-          {/* Record */}
-          <div className="border rounded-md p-4 bg-gray-50 text-sm">
-            <p>
-              <span className="text-gray-600">Created: </span>
-              <span className="font-medium">{new Date(selectedPayment?.created_at ?? "0").toLocaleString()}</span>
-            </p>
-            <p>
-              <span className="text-gray-600">Updated: </span>
-              <span className="font-medium">{new Date(selectedPayment?.updated_at ?? "0").toLocaleString()}</span>
-            </p>
-          </div>
-          {selectedPayment?.status === "awaiting_verification" && (
-            <div className="flex flex-col gap-3 mt-4">
-              <Button variant="default" onClick={() => setApproveConfirmOpen(true)} disabled={verifyActionLoading}>
-                <CheckCircle className="mr-2 h-4 w-4" /> Approve
-              </Button>
-              <Button variant="destructive" onClick={() => setRejectReasonOpen(true)} disabled={verifyActionLoading}>
-                <XCircle className="mr-2 h-4 w-4" /> Reject
-              </Button>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
+      {/* Approve Confirm Dialog */}
       <Dialog open={approveConfirmOpen} onOpenChange={setApproveConfirmOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -615,6 +740,7 @@ export default function LenderPaymentsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Reject Reason Dialog */}
       <Dialog open={rejectReasonOpen} onOpenChange={setRejectReasonOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -637,7 +763,7 @@ export default function LenderPaymentsPage() {
               onClick={() => {
                 setRejectReasonOpen(false)
                 handleVerifyPayment("reject", rejectReason)
-                setRejectReason("") // clear after submit
+                setRejectReason("")
               }}
               disabled={verifyActionLoading || !rejectReason.trim()}
             >

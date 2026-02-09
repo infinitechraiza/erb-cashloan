@@ -31,7 +31,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
+  const token = localStorage.getItem('token');
+  if (!token || token === 'undefined' || token === 'null') return null;
+  return token;
 };
 
 const setToken = (token: string): void => {
@@ -42,7 +44,14 @@ const setToken = (token: string): void => {
 const getUser = (): User | null => {
   if (typeof window === 'undefined') return null;
   const user = localStorage.getItem('user');
-  return user ? JSON.parse(user) : null;
+  if (!user || user === 'undefined' || user === 'null') return null;
+  try {
+    return JSON.parse(user);
+  } catch (error) {
+    console.error('Failed to parse user from localStorage:', error);
+    localStorage.removeItem('user');
+    return null;
+  }
 };
 
 const setUserStorage = (user: User): void => {
@@ -90,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUserStorage(data.user);
       setUserState(data.user);
-      router.push('/dashboard');
+      router.push('/');
     } catch (error) {
       throw error;
     }
@@ -118,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUserStorage(data.user);
       setUserState(data.user);
-      router.push('/dashboard');
+      router.push('/login');
     } catch (error) {
       throw error;
     }

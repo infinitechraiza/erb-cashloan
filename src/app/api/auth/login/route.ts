@@ -1,47 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+
+const LARAVEL_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, password } = body;
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { message: 'Email and password are required' },
-        { status: 400 }
-      );
-    }
-
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-    const response = await fetch(`${laravelUrl}/api/auth/login`, {
+    // Call Laravel login endpoint
+    const response = await fetch(`${LARAVEL_API_URL}/api/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: JSON.stringify({ email, password }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const error = await response.json();
       return NextResponse.json(
-        { message: error.message || 'Login failed' },
+        { success: false, message: data.message || 'Login failed' },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
+    // Set the token cookie in Next.js
+    const cookieStore = await cookies();
+    cookieStore.set('token', data.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
 
-    return NextResponse.json(
-      {
-        message: 'Login successful',
-        token: data.token,
-        user: data.user,
-      },
-      { status: 200 }
-    );
+    // Return user data and token (token for localStorage backward compatibility)
+    return NextResponse.json({
+      success: true,
+      message: data.message,
+      user: data.user,
+      token: data.token,
+    });
   } catch (error) {
-    console.error('[v0] Login error:', error);
+    console.error('Login API error:', error);
     return NextResponse.json(
-      { message: 'An error occurred during login' },
+      { success: false, message: 'Internal server error' },
       { status: 500 }
     );
   }
