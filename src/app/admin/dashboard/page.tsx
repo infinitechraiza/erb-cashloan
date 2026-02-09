@@ -40,19 +40,18 @@ interface Loan {
 
 export default function AdminDashboard() {
     const router = useRouter()
-    const { authenticated } = useAuth()
+    const { user } = useAuth()
     const [users, setUsers] = useState<BorrowerUser[]>([])
     const [loans, setLoans] = useState<Loan[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState("")
 
     useEffect(() => {
-        if (!authenticated) {
+        if (!user || user.role !== "admin") {
             router.push("/login")
             return
         }
-        if (authenticated) fetchAdminData()
-    }, [authenticated, router])
+    }, [user, router])
 
     const fetchAdminData = async () => {
         setLoading(true)

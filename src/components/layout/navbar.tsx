@@ -30,7 +30,9 @@ export function Navbar() {
     pathname?.startsWith("/admin") ||
     pathname?.startsWith("/lender") ||
     pathname?.startsWith("/loan-officer") ||
-    pathname?.startsWith("/payments")
+    pathname?.startsWith("/payments") ||
+    pathname?.startsWith("/borrower") ||
+    pathname?.startsWith("/settings")
 
   if (shouldHideNavbar) return null
 
@@ -44,17 +46,23 @@ export function Navbar() {
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8">
-          <Link href="/" className="text-sm hover:text-primary">Home</Link>
-          <Link href="/loans" className="text-sm hover:text-primary">Loans</Link>
-          <Link href="/about" className="text-sm hover:text-primary">About</Link>
-          <Link href="/contact" className="text-sm hover:text-primary">Contact</Link>
+          <Link href="/" className="text-sm hover:text-primary">
+            Home
+          </Link>
+          <Link href="/loans" className="text-sm hover:text-primary">
+            Loans
+          </Link>
+          <Link href="/about" className="text-sm hover:text-primary">
+            About
+          </Link>
+          <Link href="/contact" className="text-sm hover:text-primary">
+            Contact
+          </Link>
         </div>
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-4">
-          <Button className="bg-primary text-white rounded-full">
-            Get the App
-          </Button>
+          <Button className="bg-primary text-white rounded-full">Get the App</Button>
           {authenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -66,8 +74,12 @@ export function Navbar() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/dashboard">Dashboard</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard">Dashboard</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">Settings</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                   <LogOut className="w-4 h-4 mr-2" /> Logout
@@ -82,20 +94,14 @@ export function Navbar() {
                 </Button>
               </Link>
               <Link href="/login">
-                <Button className="rounded-full bg-primary text-white">
-                  Login
-                </Button>
+                <Button className="rounded-full bg-primary text-white">Login</Button>
               </Link>
             </>
           )}
         </div>
 
         {/* Mobile Menu Button */}
-        <Button
-          variant="ghost"
-          className="md:hidden"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
+        <Button variant="ghost" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
           {mobileOpen ? <X /> : <Menu />}
         </Button>
       </div>
@@ -103,46 +109,42 @@ export function Navbar() {
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="md:hidden flex flex-col border-t bg-white px-6 py-4 space-y-4">
-          <Link href="/" onClick={() => setMobileOpen(false)}>Home</Link>
-          <Link href="/loans" onClick={() => setMobileOpen(false)}>Loans</Link>
-          <Link href="/about" onClick={() => setMobileOpen(false)}>About</Link>
-          <Link href="/contact" onClick={() => setMobileOpen(false)}>Contact</Link>
+          <Link href="/" onClick={() => setMobileOpen(false)}>
+            Home
+          </Link>
+          <Link href="/loans" onClick={() => setMobileOpen(false)}>
+            Loans
+          </Link>
+          <Link href="/about" onClick={() => setMobileOpen(false)}>
+            About
+          </Link>
+          <Link href="/contact" onClick={() => setMobileOpen(false)}>
+            Contact
+          </Link>
 
           <div className="pt-4 border-t space-y-3">
             {authenticated && user ? (
               <div className="flex flex-col gap-2">
                 <Link href="/dashboard">
-                  <Button className="w-full">
-                    Dashboard
-                  </Button>
+                  <Button className="w-full">Dashboard</Button>
                 </Link>
                 <Link href="/settings">
-                  <Button className="w-full">
-                    Settings
-                  </Button>
+                  <Button className="w-full">Settings</Button>
                 </Link>
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={handleLogout}
-                >
+                <Button variant="destructive" className="w-full" onClick={handleLogout}>
                   Logout
                 </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <Button className="bg-primary text-white rounded-md">
-                  Get the App
-                </Button>
+                <Button className="bg-primary text-white rounded-md">Get the App</Button>
                 <Link href="/register">
                   <Button variant="outline" className="w-full">
                     Register
                   </Button>
                 </Link>
                 <Link href="/login">
-                  <Button className="w-full bg-primary text-white">
-                    Login
-                  </Button>
+                  <Button className="w-full bg-primary text-white">Login</Button>
                 </Link>
               </div>
             )}

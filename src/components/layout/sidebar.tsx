@@ -17,22 +17,22 @@ const navigationByRole = {
     },
     {
       name: "Dashboard",
-      href: "/dashboard",
+      href: "/borrower/dashboard",
       icon: LayoutDashboard,
     },
     {
       name: "Loans",
-      href: "/dashboard/loans",
+      href: "/borrower/loans",
       icon: DollarSign,
     },
     {
       name: "Payments",
-      href: "/dashboard/payments",
+      href: "/borrower/payments",
       icon: CreditCard,
     },
     {
       name: "Settings",
-      href: "/dashboard/settings",
+      href: "/borrower/settings",
       icon: Settings,
     },
   ],
@@ -71,7 +71,7 @@ const navigationByRole = {
   admin: [
     {
       name: "Dashboard",
-      href: "/dashboard/loans",
+      href: "/admin/dashboard",
       icon: LayoutDashboard,
     },
     {
