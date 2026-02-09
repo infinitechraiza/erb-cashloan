@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth-context"
 import { PaymentModal } from "@/components/payment-modal"
 import { AlertCircle, CheckCircle2, Clock, CreditCard, DollarSign, Calendar } from "lucide-react"
-import { BorrowerSidebar } from "@/components/borrower/borrower-sidebar"
 
 interface Payment {
   id: number
@@ -143,7 +142,6 @@ export default function PaymentsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <BorrowerSidebar />
 
       {/* Main Content */}
       <div className="flex-1 lg:ml-0">

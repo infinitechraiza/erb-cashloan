@@ -1,9 +1,9 @@
 'use client';
 
-import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, PlusCircle, CheckCircle2, XCircle, User, DollarSign, Calendar, FileText, AlertCircle } from "lucide-react";
+import { RefreshCw, PlusCircle, CheckCircle2, XCircle, User, DollarSign, Calendar, FileText, AlertCircle, Eye, PieChart, TrendingUp, TrendingDown } from "lucide-react";
+
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,8 +59,8 @@ interface LoanApplication {
 
 interface Lender {
   id: number
-  first_name: string
-  last_name: string
+  first_name?: string
+  last_name?: string
   email?: string
 }
 
@@ -202,6 +202,8 @@ const LoansManagementPage = () => {
       }
 
       const data = await res.json();
+      console.log('Lenders data:', data);
+
       setLenders(data.lenders || data.data || []);
     } catch (err) {
       console.error('Error fetching lenders:', err);
@@ -454,8 +456,18 @@ const LoansManagementPage = () => {
   // Row actions - conditionally show approve/reject/activate buttons
   const rowActions = (loan: LoanApplication) => (
     <div className="flex items-center gap-2 justify-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setSelectedLoan(loan)
+        }}
+      >
+        <Eye className="h-4 w-4 text-blue-500" />
+      </Button>
       {loan.status === "pending" && (
         <>
+
           <Button
             variant="ghost"
             size="sm"
@@ -536,7 +548,7 @@ const LoansManagementPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Borrower */}
             <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col items-start gap-3">
                 <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <User className="h-5 w-5 text-blue-800" />
                 </div>
@@ -548,7 +560,8 @@ const LoansManagementPage = () => {
                     {loan.borrower ? `${loan.borrower.first_name} ${loan.borrower.last_name}` : "N/A"}
                   </p>
                   {loan.borrower?.email && (
-                    <p className="text-xs text-gray-500 mt-1">{loan.borrower.email}</p>
+                    <p className="text-balance text-xs font-bold text-gray-500 mt-1">{loan.borrower.email}</p>
+
                   )}
                 </div>
               </div>
@@ -556,7 +569,7 @@ const LoansManagementPage = () => {
 
             {/* Lender */}
             <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col items-start gap-3">
                 <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <User className="h-5 w-5 text-green-800" />
                 </div>
@@ -708,9 +721,9 @@ const LoansManagementPage = () => {
   );
 
   return (
-    <div className="flex min-h-screen">
-      <AdminSidebar />
-      <main className="flex-1 lg:ml-64 bg-background min-h-screen pt-16 lg:pt-0">
+    <div className="min-h-screen">
+
+      <main className="min-h-screen bg-white">
         <header className="border-b border-border bg-card sticky top-16 lg:top-0 z-40">
           <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -746,37 +759,83 @@ const LoansManagementPage = () => {
         </header>
 
         {/* Stats Cards */}
-        <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-            <Card className="p-3 sm:p-4 text-center">
-              <h3 className="text-xs sm:text-sm font-medium text-muted-foreground">Total Loans</h3>
-              <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
-                {statsLoading ? "..." : loanStats?.total_loans ?? 0}
-              </p>
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
+
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Total Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.total_loans ?? 0}
+                  </p>
+                </div>
+              </div>
+
             </Card>
-            <Card className="p-3 sm:p-4 text-center">
-              <h3 className="text-xs sm:text-sm font-medium text-muted-foreground">Pending Loans</h3>
-              <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
-                {statsLoading ? "..." : loanStats?.pending_loans ?? 0}
-              </p>
+
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
+
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-indigo-50 rounded-lg">
+                    <PieChart className="h-6 w-6 text-indigo-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Pending Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.pending_loans ?? 0}
+                  </p>
+                </div>
+              </div>
+
             </Card>
-            <Card className="p-3 sm:p-4 text-center">
-              <h3 className="text-xs sm:text-sm font-medium text-muted-foreground">Active Loans</h3>
-              <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
-                {statsLoading ? "..." : loanStats?.active_loans ?? 0}
-              </p>
+
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
+
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-emerald-50 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-emerald-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Active Loans</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : loanStats?.active_loans ?? 0}
+                  </p>
+                </div>
+              </div>
+
             </Card>
-            <Card className="p-3 sm:p-4 text-center">
-              <h3 className="text-xs sm:text-sm font-medium text-muted-foreground">Total Disbursed</h3>
-              <p className="text-base sm:text-2xl font-bold mt-1 sm:mt-2 break-words">
-                {statsLoading ? "..." : `₱${Number(loanStats?.total_disbursed ?? 0).toLocaleString()}`}
-              </p>
+            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow p-3 sm:p-4 text-center">
+
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="p-5">
+                  <div className="p-3 bg-amber-50 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-amber-600" />
+                  </div>
+                </div>
+                <div className="">
+                  <p className="text-sm text-slate-600 font-medium">Total Disbursed</p>
+                  <p className="text-lg sm:text-2xl font-bold mt-1 sm:mt-2">
+                    {statsLoading ? "..." : `₱${Number(loanStats?.total_disbursed ?? 0).toLocaleString()}`}
+                  </p>
+                </div>
+              </div>
+
             </Card>
           </div>
         </div>
 
         {/* Loans Table */}
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <ReusableDataTable<LoanApplication>
             apiEndpoint="/api/loans"
             refresh={refresh}
@@ -790,7 +849,7 @@ const LoansManagementPage = () => {
               title: "Loan Details",
               render: renderDetailsDialog,
             }}
-            defaultPerPage={10}
+            defaultPerPage={5}
             defaultSort={{ field: 'created_at', order: 'desc' }}
             emptyMessage="No loans found"
             loadingMessage="Loading loans..."
@@ -815,11 +874,31 @@ const LoansManagementPage = () => {
                   <SelectValue placeholder="Select Lender" />
                 </SelectTrigger>
                 <SelectContent>
-                  {lenders.map((lender) => (
-                    <SelectItem key={lender.id} value={lender.id.toString()}>
-                      {lender.first_name} {lender.last_name}
+                  {lenders && lenders.length > 0 ? (
+                    lenders.map((lender, index) => {
+                      // Try different possible field names
+                      const firstName = lender.first_name || '';
+                      const lastName = lender.last_name || '';
+                      const Name = lender.last_name || '';
+                      const displayName = firstName || lastName
+                        ? `${firstName} ${lastName}`.trim()
+                        : `Lender ${index + 1}`;
+
+                      return (
+                        <SelectItem
+                          key={lender?.id || index}
+                          value={lender?.id?.toString() || index.toString()}
+                        >
+                          {displayName}
+                          {lender?.email && ` (${lender.email})`}
+                        </SelectItem>
+                      );
+                    })
+                  ) : (
+                    <SelectItem value="no-lenders" disabled>
+                      No lenders available
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>

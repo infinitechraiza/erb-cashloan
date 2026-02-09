@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, RefreshCw, TrendingUp, TrendingDown, DollarSign, Users, FileText, PieChart } from "lucide-react"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { useState } from "react"
 
 export default function AdminReportsPage() {
@@ -23,7 +22,7 @@ export default function AdminReportsPage() {
   }
 
   if (!authenticated || user?.role !== "admin") {
-    router.push("/dashboard")
+    router.push("/login")
     return null
   }
 
@@ -37,8 +36,7 @@ export default function AdminReportsPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <AdminSidebar />
-      <main className="w-full flex-1 ml-0 lg:ml-64 min-h-screen pt-16 lg:pt-0">
+      <main className="w-full flex-1 ml-0 min-h-screen pt-16 lg:pt-0">
         {/* Header */}
         <header className="border-b border-slate-200 bg-white sticky top-16 lg:top-0 z-40 shadow-sm">
           <div className="px-4 sm:px-6 lg:px-8 py-6">

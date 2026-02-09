@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Properly typed context for Next.js 15
+type RouteContext = {
+  params: Promise<{ id: string }>
+}
+
 export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ loanId: string }> }
+  request: NextRequest, context: RouteContext
 ) {
   try {
     const params = await context.params
-    const { loanId } = params
+    const id = params.id
 
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
@@ -19,7 +23,7 @@ export async function GET(
     }
 
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-    const url = `${laravelUrl}/api/loans/${loanId}/payments`;
+    const url = `${laravelUrl}/api/loans/${id}/payments`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -62,13 +66,11 @@ export async function GET(
 }
 
 export async function POST(
-  request: NextRequest,
-  context: { params: { loanId: string } }
+  request: NextRequest, context: RouteContext
 ) {
   try {
-
-    const params = context.params
-    const { loanId } = params
+    const params = await context.params
+    const id = params.id
 
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
@@ -82,10 +84,10 @@ export async function POST(
 
     const body = await request.json();
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const url = `${laravelUrl}/api/loans/${loanId}/payments`;
+    const url = `${laravelUrl}/api/loans/${id}/payments`;
 
     console.log('[Loan Payments API] Processing payment:', {
-      loanId: params.loanId,
+      loanId: id,
       paymentMethod: body.payment_method,
     });
 

@@ -36,6 +36,8 @@ import {
   Search,
   X,
 } from "lucide-react"
+import { authenticatedFetch, handleApiResponse } from "@/lib/auth"
+import { useRouter } from "next/navigation"
 
 // Generic types
 export interface ColumnDef<T> {
@@ -116,11 +118,12 @@ export function ReusableDataTable<T extends Record<string, any>>({
   className = "",
   emptyMessage = "No data found",
   loadingMessage = "Loading...",
-  defaultPerPage = 10,
+  defaultPerPage = 5,
   defaultSort,
   hideFilters = false,
   hidePagination = false,
 }: DataTableProps<T>) {
+  const router = useRouter()
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRow, setSelectedRow] = useState<T | null>(null)
@@ -196,32 +199,26 @@ export function ReusableDataTable<T extends Record<string, any>>({
         params.append('sort_order', sortOrder)
       }
 
-      const token = localStorage.getItem("token");
       const url = `${apiEndpoint}?${params}`
 
-      console.log('📡 [DataTable] Fetching:', url);
+      console.log('📡 [DataTable] Fetching:', url)
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      })
+      // Use authenticatedFetch instead of direct fetch
+      const response = await authenticatedFetch(url)
+      const result = await handleApiResponse<any>(response, router)
 
-      const result = await response.json()
-
-      console.log('📦 [DataTable] Full response:', result);
-      console.log('📊 [DataTable] Data array:', result.data);
+      console.log('📦 [DataTable] Full response:', result)
+      console.log('📊 [DataTable] Data array:', result.data)
       console.log('📈 [DataTable] Pagination:', {
         current_page: result.current_page,
         last_page: result.last_page,
         total: result.total
-      });
+      })
 
       // ✅ Direct Laravel pagination format
       const dataArray = Array.isArray(result.data) ? result.data : []
 
-      console.log('✅ [DataTable] Setting data:', dataArray.length, 'items');
+      console.log('✅ [DataTable] Setting data:', dataArray.length, 'items')
 
       setData(dataArray)
       setPagination({
@@ -235,6 +232,7 @@ export function ReusableDataTable<T extends Record<string, any>>({
     } catch (error) {
       console.error("❌ [DataTable] Error fetching data:", error)
       setData([])
+      // Error is already handled by handleApiResponse (401 redirects to login)
     } finally {
       setLoading(false)
     }
@@ -420,14 +418,17 @@ export function ReusableDataTable<T extends Record<string, any>>({
                 {columns.map((column) => (
                   <TableHead
                     key={column.key}
-                    className={`text-blue-800 font-semibold ${column.width || ''} ${column.align === 'center' ? 'text-center' :
-                      column.align === 'right' ? 'text-right' : ''
+                    className={`text-blue-800 font-semibold ${column.width || ''} ${column.align === 'center'
+                        ? 'text-center'
+                        : column.align === 'right'
+                          ? 'text-right'
+                          : ''
                       }`}
                   >
                     {column.sortable ? (
                       <button
                         onClick={() => handleSort(column.key)}
-                        className="flex items-center transition-colors"
+                        className="flex items-center justify-center gap-1 transition-colors w-full"
                       >
                         {column.label}
                         {getSortIcon(column.key)}
@@ -436,6 +437,7 @@ export function ReusableDataTable<T extends Record<string, any>>({
                       column.label
                     )}
                   </TableHead>
+
                 ))}
                 {rowActions && (
                   <TableHead className="text-blue-800 font-semibold text-center w-[100px]">
@@ -447,13 +449,13 @@ export function ReusableDataTable<T extends Record<string, any>>({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + (rowActions ? 1 : 0)} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={columns.length + (rowActions ? 1 : 0)} className="flex items-center justify-center gap-1 transition-colors w-full">
                     {loadingMessage}
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + (rowActions ? 1 : 0)} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={columns.length + (rowActions ? 1 : 0)} className="flex items-center justify-center gap-1 transition-colors w-full">
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
@@ -469,9 +471,9 @@ export function ReusableDataTable<T extends Record<string, any>>({
                       return (
                         <TableCell
                           key={column.key}
-                          className={
-                            column.align === 'center' ? 'text-center' :
-                              column.align === 'right' ? 'text-right' : ''
+                          className={`
+                            ${column.align === 'center' ? 'text-center' :
+                              column.align === 'right' ? 'text-right' : ''}`
                           }
                           onClick={() => handleRowClick(row)}
                         >

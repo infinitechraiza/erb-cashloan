@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { ReusableDataTable, ColumnDef, FilterConfig } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -84,7 +83,7 @@ const UserManagementPage = () => {
       render: (value) => (
         <div className="flex items-center gap-2 text-gray-600">
           <Mail className="h-4 w-4 text-blue-800/60 flex-shrink-0" />
-          <span className="text-sm break-words whitespace-normal">{value}</span>
+          <span className="text-sm text-center break-words whitespace-normal">{value}</span>
         </div>
       ),
     },
@@ -262,8 +261,7 @@ const UserManagementPage = () => {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <AdminSidebar />
-      <main className="w-full flex-1 ml-0 lg:ml-64 min-h-screen pt-16 lg:pt-0">
+      <main className="w-full flex-1 ml-0 min-h-screen pt-16 lg:pt-0">
         {/* Header */}
         <header className="border-b border-slate-200 bg-white sticky top-16 lg:top-0 z-40 shadow-sm">
           <div className="px-4 sm:px-6 lg:px-8 py-6">
@@ -306,7 +304,7 @@ const UserManagementPage = () => {
               title: "Member Profile",
               render: renderDetailsDialog,
             }}
-            defaultPerPage={10}
+            defaultPerPage={5}
             defaultSort={{ field: 'created_at', order: 'desc' }}
             emptyMessage="No users found"
             loadingMessage="Loading users..."

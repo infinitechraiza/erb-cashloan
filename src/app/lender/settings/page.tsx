@@ -15,7 +15,7 @@ interface ProfileData {
   profileImageUrl: string
 }
 
-export default function AdminSettingsPage() {
+export default function LenderSettingsPage() {
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState("")

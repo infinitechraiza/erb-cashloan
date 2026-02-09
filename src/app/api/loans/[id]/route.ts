@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function GET(
   request: NextRequest,
@@ -9,12 +10,21 @@ export async function GET(
     const params = await context.params
     const { id } = params
 
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
+
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
 
     if (!token) {
       return NextResponse.json(
-        { message: 'Unauthorized' },
+        { success: false, message: 'Not authenticated. Please log in again.' },
         { status: 401 }
       );
     }

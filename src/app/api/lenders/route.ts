@@ -3,19 +3,28 @@ import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get token from HTTP-only cookie
-    const cookieStore = await cookies()
-    const token = cookieStore.get('token')?.value
+    // Try to get token from BOTH cookies AND Authorization header
+    const cookieStore = await cookies();
+    let token = cookieStore.get('token')?.value;
+
+    // If no token in cookies, try Authorization header
+    if (!token) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
 
     if (!token) {
       return NextResponse.json(
-        { success: false, message: `Not authenticated. Please log in again. ${cookieStore.get('token')?.value}` },
+        { success: false, message: 'Not authenticated. Please log in again.' },
         { status: 401 }
       );
     }
 
     // Only allow admin users
     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
     const url = new URL(`${laravelUrl}/api/lenders`);
 
     // Forward query params (like ?q=searchTerm)

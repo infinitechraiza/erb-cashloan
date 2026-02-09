@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { FileText, Download, ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
 
 interface Loan {
   id: number
@@ -122,10 +121,9 @@ export default function LoanDetailPage() {
   return (
     <div className="flex">
       {/* Sidebar */}
-      <AdminSidebar />
 
       {/* Main content */}
-     <main className="flex-1 ml-64 bg-background min-h-screen">
+     <main className="flex-1    bg-background min-h-screen">
         {/* Header */}
         <header className="sticky top-0 z-40 border-b border-border bg-card">
           <div className="px-8 py-6 max-w-6xl mx-auto">

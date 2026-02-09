@@ -3,9 +3,11 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/components/auth-context"
-import { Navbar } from "@/components/navbar"
+import { RoleBasedSidebar } from "@/components/layout/sidebar"
 import "./globals.css"
 import { Toaster } from "sonner"
+import { Navbar } from "@/components/layout/navbar"
+import { ConditionalMainWrapper } from "@/components/conditional-main-wrapper"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -43,8 +45,13 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <AuthProvider>
           <Toaster richColors position="top-right" />
-          <Navbar />
-          {children}
+          <div className="min-h-screen bg-background">
+            <RoleBasedSidebar />
+            <ConditionalMainWrapper>
+              <Navbar />
+              {children}
+            </ConditionalMainWrapper>
+          </div>
         </AuthProvider>
         <Analytics />
       </body>
