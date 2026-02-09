@@ -109,7 +109,7 @@ export default function HomePage() {
           <Card className="border border-border p-8 rounded-2xl">
             <div className="flex items-start gap-3 mb-8">
               <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-                L
+                LH
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-foreground">

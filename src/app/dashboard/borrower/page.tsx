@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-context"
-import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { BorrowerSidebar } from "@/components/borrower/borrower-sidebar"
 import Link from "next/link"
@@ -19,8 +19,17 @@ import {
     Calculator,
     CreditCard,
     FileText,
-    Clock
+    Clock,
+    Minus,
+    Plus
 } from "lucide-react"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface User {
     id: number
@@ -77,6 +86,29 @@ export default function BorrowerDashboard() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
+    // Modal state
+    const [showCalculator, setShowCalculator] = useState(false)
+
+    // Calculator state
+    const [loanAmount, setLoanAmount] = useState(50000)
+    const [loanTerm, setLoanTerm] = useState(12)
+
+    const termOptions = [6, 12, 18, 24, 36]
+
+    const handleAmountChange = (amount: number) => {
+        if (amount < 5000) amount = 5000
+        if (amount > 5000000) amount = 5000000
+        setLoanAmount(amount)
+    }
+
+    const processingFee = loanAmount * 0.02
+    const disbursedAmount = loanAmount - processingFee
+
+    // Example interest logic (you can adjust rate)
+    const interestRate = 12 // 12% annual sample
+    const monthlyPayment =
+        (loanAmount + loanAmount * (interestRate / 100)) / loanTerm
+
     useEffect(() => {
         if (!authenticated && !authLoading) {
             router.push("/login")
@@ -124,20 +156,40 @@ export default function BorrowerDashboard() {
             let monthlyPayment = 0
             let outstandingBalance = 0
             let nextPayment: string | null = null
-            const active: Loan[] = []
 
-            loanList.forEach(l => {
+            // Filter active (approved + still paying)
+            const active = loanList.filter(
+                (l) =>
+                    l.status.toLowerCase() === "approved" &&
+                    Number(l.outstanding_balance) > 0
+            )
+
+            loanList.forEach((l) => {
                 totalBorrowed += Number(l.principal_amount)
-                monthlyPayment += Number(l.approved_amount / l.term_months) + Number(l.approved_amount * l.interest_rate / 100 / l.term_months)
                 outstandingBalance += Number(l.outstanding_balance)
+            })
 
-                if (l.status === "approved" && l.outstanding_balance > 0) {
-                    active.push(l)
-                    if (!nextPayment && l.next_payment_date) nextPayment = l.next_payment_date
+            // Calculate monthly payment + next payment from active loans only
+            active.forEach((l) => {
+                monthlyPayment +=
+                    Number(l.approved_amount) / Number(l.term_months) +
+                    (Number(l.approved_amount) *
+                        Number(l.interest_rate)) /
+                    100 /
+                    Number(l.term_months)
+
+                if (!nextPayment && l.next_payment_date) {
+                    nextPayment = l.next_payment_date
                 }
             })
 
-            setLoanStats({ totalBorrowed, monthlyPayment, outstandingBalance, nextPayment })
+            setLoanStats({
+                totalBorrowed,
+                monthlyPayment,
+                outstandingBalance,
+                nextPayment,
+            })
+
             setActiveLoans(active)
             setLoans(loanList)
         } catch (err: any) {
@@ -222,7 +274,7 @@ export default function BorrowerDashboard() {
 
                 <main className="p-4 sm:p-6">
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         {/* Total Borrowed */}
                         <Card className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
@@ -231,7 +283,7 @@ export default function BorrowerDashboard() {
                                     {Number(loanStats.totalBorrowed).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                                 </p>
                             </div>
-                            <div className="flex-shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
+                            <div className="shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
                                 <Wallet className="h-6 w-6" />
                             </div>
                         </Card>
@@ -247,7 +299,7 @@ export default function BorrowerDashboard() {
                                     Next Payment: {loanStats.nextPayment ?? "—"}
                                 </p>
                             </div>
-                            <div className="flex-shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
+                            <div className="shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
                                 <HandCoins className="h-6 w-6" />
                             </div>
                         </Card>
@@ -260,7 +312,7 @@ export default function BorrowerDashboard() {
                                     {Number(loanStats.outstandingBalance).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
                                 </p>
                             </div>
-                            <div className="flex-shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
+                            <div className="shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
                                 <IdCard className="h-6 w-6" />
                             </div>
                         </Card>
@@ -273,41 +325,134 @@ export default function BorrowerDashboard() {
                                     {loanStats.nextPayment || "No upcoming payment"}
                                 </p>
                             </div>
-                            <div className="flex-shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
+                            <div className="shrink-0 p-3 bg-emerald-100 text-emerald-700 rounded-lg">
                                 <TrendingUp className="h-6 w-6" />
                             </div>
                         </Card>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 space-y-6 gap-2">
-                        <Card className="p-6">
-                            <h3 className="text-lg font-semibold text-card-foreground mb-4">Upcoming Payment</h3>
-                            <div>
-                                <Card className="bg-gray-50">
-                                    
-                                </Card>
-                            </div>
+                        <Card className="p-6 h-auto">
+                            <h3 className="text-lg font-semibold text-card-foreground mb-4">
+                                Upcoming Payment
+                            </h3>
+
+                            {activeLoans.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">
+                                    No active payments.
+                                </div>
+                            ) : (
+                                (() => {
+                                    // Sort active loans by next payment date
+                                    const sortedLoans = [...activeLoans].sort((a, b) => {
+                                        if (!a.next_payment_date) return 1
+                                        if (!b.next_payment_date) return -1
+                                        return (
+                                            new Date(a.next_payment_date).getTime() -
+                                            new Date(b.next_payment_date).getTime()
+                                        )
+                                    })
+
+                                    const nextLoan = sortedLoans[0]
+
+                                    const monthlyAmount =
+                                        Number(nextLoan.approved_amount) /
+                                        Number(nextLoan.term_months) +
+                                        (Number(nextLoan.approved_amount) *
+                                            Number(nextLoan.interest_rate)) /
+                                        100 /
+                                        Number(nextLoan.term_months)
+
+                                    return (
+                                        <Card className="bg-gray-50 p-4 space-y-3">
+                                            <div className="flex justify-between">
+                                                <span className="text-sm text-muted-foreground">
+                                                    Loan Type
+                                                </span>
+                                                <span className="font-medium">
+                                                    {nextLoan.type}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex justify-between">
+                                                <span className="text-sm text-muted-foreground">
+                                                    Due Date
+                                                </span>
+                                                <span className="font-medium">
+                                                    {nextLoan.next_payment_date
+                                                        ? new Date(
+                                                            nextLoan.next_payment_date
+                                                        ).toLocaleDateString("en-PH")
+                                                        : "—"}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex justify-between">
+                                                <span className="text-sm text-muted-foreground">
+                                                    Amount Due
+                                                </span>
+                                                <span className="font-bold text-lg">
+                                                    {monthlyAmount.toLocaleString("en-PH", {
+                                                        style: "currency",
+                                                        currency: "PHP",
+                                                    })}
+                                                </span>
+                                            </div>
+
+                                            <div className="pt-2">
+                                                <Button className="w-full">
+                                                    Make Payment
+                                                </Button>
+                                            </div>
+                                        </Card>
+                                    )
+                                })()
+                            )}
                         </Card>
 
                         {/* Quick Actions */}
-                        <Card className="card-elevated p-6">
+                        <Card className="card-elevated p-6 h-auto">
                             <h3 className="text-lg font-semibold text-card-foreground mb-4">Quick Actions</h3>
                             <div className="grid grid-cols-2 gap-3">
-                                <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200">
+
+                                {/* LOAN CALCULATOR */}
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowCalculator(true)}
+                                    className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200"
+                                >
                                     <Calculator className="w-5 h-5" />
                                     <span className="text-xs">Loan Calculator</span>
                                 </Button>
-                                <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200">
+
+                                {/* MAKE PAYMENT */}
+                                <Button
+                                    variant="outline"
+                                    className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200"
+                                >
                                     <CreditCard className="w-5 h-5" />
                                     <span className="text-xs">Make Payment</span>
                                 </Button>
-                                <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200">
+
+                                {/* VIEW STATEMENTS */}
+                                <Button
+                                    variant="outline"
+                                    className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200"
+                                >
                                     <FileText className="w-5 h-5" />
                                     <span className="text-xs">View Statements</span>
                                 </Button>
-                                <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200">
-                                    <Clock className="w-5 h-5" />
-                                    <span className="text-xs">Payment History</span>
+
+                                {/* DOCUMENTS */}
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="flex flex-col items-center gap-2 h-auto py-4 hover:text-black hover:bg-blue-200"
+                                >
+                                    <Link href="/documents">
+                                        <Clock className="w-5 h-5" />
+                                        <span className="text-xs">Documents</span>
+                                    </Link>
                                 </Button>
                             </div>
                         </Card>
@@ -335,35 +480,53 @@ export default function BorrowerDashboard() {
                                         <tr>
                                             <td colSpan={8} className="pt-8 pb-3 text-center">
                                                 <div className="flex flex-col justify-center items-center gap-2">
-                                                    <span>No active loans.{" "}</span>
-                                                    <Link href="/dashboard/loans" className="text-white bg-primary w-26 px-2 py-2 rounded-lg">
+                                                    <span>No active loans. </span>
+                                                    <Link
+                                                        href="/dashboard/loans"
+                                                        className="text-white bg-primary w-26 px-2 py-2 rounded-lg"
+                                                    >
                                                         Apply now
                                                     </Link>
                                                 </div>
                                             </td>
                                         </tr>
                                     ) : (
-                                        activeLoans.map((l) => {
-                                            const loanDetail = loanMap[l.id]
-                                            return (
-                                                <tr key={l.id} className="border-b border-gray-100">
-                                                    <td className="px-4 py-2">{l.type}</td>
-                                                    <td className="px-4 py-2">
-                                                        {l.approved_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                                                    </td>
-                                                    <td className="px-4 py-2">
-                                                        {loanDetail?.principal_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) ?? "—"}
-                                                    </td>
-                                                    <td className="px-4 py-2">
-                                                        {loanDetail?.outstanding_balance.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) ?? "—"}
-                                                    </td>
-                                                    <td className="px-4 py-2">{l.interest_rate}%</td>
-                                                    <td className="px-4 py-2">{l.term_months} months</td>
-                                                    <td className="px-4 py-2 capitalize">{l.status}</td>
-                                                    <td className="px-4 py-2">{new Date(l.created_at).toLocaleDateString("en-PH")}</td>
-                                                </tr>
-                                            )
-                                        })
+                                        activeLoans.map((l) => (
+                                            <tr key={l.id} className="border-b border-gray-100">
+                                                <td className="px-4 py-2">{l.type}</td>
+
+                                                <td className="px-4 py-2">
+                                                    {Number(l.approved_amount).toLocaleString("en-PH", {
+                                                        style: "currency",
+                                                        currency: "PHP",
+                                                    })}
+                                                </td>
+
+                                                <td className="px-4 py-2">
+                                                    {Number(l.principal_amount).toLocaleString("en-PH", {
+                                                        style: "currency",
+                                                        currency: "PHP",
+                                                    })}
+                                                </td>
+
+                                                <td className="px-4 py-2">
+                                                    {Number(l.outstanding_balance).toLocaleString("en-PH", {
+                                                        style: "currency",
+                                                        currency: "PHP",
+                                                    })}
+                                                </td>
+
+                                                <td className="px-4 py-2">{l.interest_rate}%</td>
+
+                                                <td className="px-4 py-2">{l.term_months} months</td>
+
+                                                <td className="px-4 py-2 capitalize">{l.status}</td>
+
+                                                <td className="px-4 py-2">
+                                                    {new Date(l.created_at).toLocaleDateString("en-PH")}
+                                                </td>
+                                            </tr>
+                                        ))
                                     )}
                                 </tbody>
                             </table>
@@ -407,6 +570,145 @@ export default function BorrowerDashboard() {
                                 </tbody>
                             </table>
                         </Card>
+
+                        {/* Loan Calculator Modal */}
+                        {showCalculator && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                                <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl relative overflow-y-auto">
+
+                                    {/* Close Button */}
+                                    <button
+                                        onClick={() => setShowCalculator(false)}
+                                        className="absolute top-4 right-4 text-gray-500 hover:text-black text-lg"
+                                    >
+                                        ✕
+                                    </button>
+
+                                    <div className="p-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+
+                                            {/* Input Section */}
+                                            <Card className="border border-border p-5 rounded-2xl">
+                                                <div className="flex items-start gap-3 mb-4">
+                                                    <div className="w-8 h-8 p-3 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
+                                                        LH
+                                                    </div>
+                                                    <h2 className="text-xl font-bold">
+                                                        Get a sample cash loan computation
+                                                    </h2>
+                                                </div>
+
+                                                {/* Loan Amount */}
+                                                <div className="mb-8">
+                                                    <label className="block text-sm font-semibold mb-3">
+                                                        How much money do you need?
+                                                    </label>
+
+                                                    <div className="flex items-center justify-center gap-4">
+                                                        <button
+                                                            onClick={() => handleAmountChange(loanAmount - 5000)}
+                                                            className="w-12 h-4 rounded-lg border"
+                                                        >
+                                                            <Minus className="w-3 h-3" />
+                                                        </button>
+
+                                                        <input
+                                                            type="number"
+                                                            value={loanAmount}
+                                                            onChange={(e) => handleAmountChange(Number(e.target.value))}
+                                                            className="flex-1 text-center text-lg font-semibold border rounded-md"
+                                                        />
+
+                                                        <button
+                                                            onClick={() => handleAmountChange(loanAmount + 5000)}
+                                                            className="w-12 h-4 rounded-lg border"
+                                                        >
+                                                            <Plus className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+
+                                                    <input
+                                                        type="range"
+                                                        min="5000"
+                                                        max="5000000"
+                                                        step="1000"
+                                                        value={loanAmount}
+                                                        onChange={(e) => handleAmountChange(Number(e.target.value))}
+                                                        className="w-full mt-4"
+                                                    />
+                                                </div>
+
+                                                {/* Terms */}
+                                                <div>
+                                                    <label className="block text-sm font-semibold mb-4">
+                                                        Sample Loan Terms (months)
+                                                    </label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {termOptions.map((term) => (
+                                                            <button
+                                                                key={term}
+                                                                onClick={() => setLoanTerm(term)}
+                                                                className={`px-4 py-2 rounded-lg font-semibold ${loanTerm === term
+                                                                    ? "bg-primary text-white"
+                                                                    : "border"
+                                                                    }`}
+                                                            >
+                                                                {term}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </Card>
+
+                                            {/* Results Section */}
+                                            <Card className="bg-yellow-50 p-8 rounded-2xl">
+                                                <div className="space-y-6">
+
+                                                    <div className="flex justify-between">
+                                                        <span>Loan Term</span>
+                                                        <span>{loanTerm} months</span>
+                                                    </div>
+
+                                                    <div className="flex justify-between">
+                                                        <span>Loan Amount</span>
+                                                        <span>₱{loanAmount.toLocaleString()}</span>
+                                                    </div>
+
+                                                    <div className="flex justify-between">
+                                                        <span>Processing Fee (2%)</span>
+                                                        <span className="text-red-500">
+                                                            -₱{processingFee.toLocaleString()}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex justify-between">
+                                                        <span>Amount to be Disbursed</span>
+                                                        <span>
+                                                            ₱{disbursedAmount.toLocaleString()}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="bg-white rounded-lg p-4 mt-6">
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Estimated Monthly Installment
+                                                        </p>
+                                                        <p className="text-xl font-bold">
+                                                            ₱{Math.round(monthlyPayment).toLocaleString()} / month
+                                                        </p>
+                                                    </div>
+
+                                                    <Link href="/dashboard/loans">
+                                                        <Button className="w-full mt-4">
+                                                            Apply for this Loan
+                                                        </Button>
+                                                    </Link>
+                                                </div>
+                                            </Card>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </main>
             </div>
