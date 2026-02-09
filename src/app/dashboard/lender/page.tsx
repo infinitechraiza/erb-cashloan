@@ -175,7 +175,7 @@ export default function AdminDashboard() {
         <div className="flex min-h-screen bg-background">
             <div className="flex-1">
                 <div className="lg:hidden h-16" />
-                <header className="border-b border-border bg-card px-4 sm:px-6 py-4">
+                <header className="hidden lg:block border-b border-border bg-card px-4 sm:px-6 py-4">
                     <h2 className="text-2xl font-semibold">Lender Dashboard</h2>
                 </header>
 

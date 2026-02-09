@@ -725,7 +725,7 @@ const LoansManagementPage = () => {
   return (
     <div className="min-h-screen">
 
-      <main className="min-h-screen bg-white">
+      <main className="bg-white">
         <header className="border-b border-border bg-card sticky top-16 lg:top-0 z-40">
           <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

@@ -211,7 +211,7 @@ export default function AdminDashboard() {
         <div className="flex min-h-screen bg-background">
             <div className="flex-1 lg:ml-0">
                 <div className="lg:hidden h-16" />
-                <header className="border-b border-border bg-card">
+                <header className="hidden lg:block border-b border-border bg-card">
                     <div className="w-full flex flex-col px-4 sm:px-6 py-4 justify-between">
                         <div className="flex justify-between">
                             <h2 className="text-2xl font-semibold leading-tight">Dashboard</h2>

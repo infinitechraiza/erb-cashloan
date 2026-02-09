@@ -24,6 +24,11 @@ import { cn } from "@/lib/utils"
 const navigationByRole = {
   borrower: [
     {
+      name: "Home",
+      href: "/",
+      icon: LayoutDashboard,
+    },
+    {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
@@ -46,8 +51,13 @@ const navigationByRole = {
   ],
   lender: [
     {
+      name: "Home",
+      href: "/",
+      icon: LayoutDashboard,
+    },
+    {
       name: "Dashboard",
-      href: "/lender",
+      href: "/dashboard",
       icon: LayoutDashboard,
     },
     {
@@ -223,19 +233,6 @@ export function RoleBasedSidebar() {
             <span className="font-semibold text-lg">{portalName}</span>
           </div>
 
-          {/* User Info */}
-          {user && (
-            <div className="px-6 py-4 border-b border-border bg-muted/50">
-              <p className="text-sm font-medium truncate">
-                {user.first_name} {user.last_name}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-              <p className="text-xs text-muted-foreground mt-1 capitalize">
-                <span className="font-medium">Role:</span> {user.role?.replace('_', ' ')}
-              </p>
-            </div>
-          )}
-
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
@@ -258,6 +255,19 @@ export function RoleBasedSidebar() {
               )
             })}
           </nav>
+
+          {/* User Info */}
+          {user && (
+            <div className="px-6 py-4 border-b border-border bg-muted/50">
+              <p className="text-sm font-medium truncate">
+                {user.first_name} {user.last_name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <p className="text-xs text-muted-foreground mt-1 capitalize">
+                <span className="font-medium">Role:</span> {user.role?.replace('_', ' ')}
+              </p>
+            </div>
+          )}
 
           {/* Logout */}
           <div className="p-3 border-t border-border">

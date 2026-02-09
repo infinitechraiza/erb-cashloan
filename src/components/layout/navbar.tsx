@@ -58,7 +58,7 @@ export function Navbar() {
           {authenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="rounded-full border-primary text-primary">
+                <Button variant="outline" className="rounded-full border-primary text-primary hover:bg-emerald-500 hover:border-emerald-500">
                   {user.first_name} {user.last_name}
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
@@ -67,7 +67,6 @@ export function Navbar() {
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link href="/dashboard">Dashboard</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/profile">Profile</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive">
@@ -111,9 +110,17 @@ export function Navbar() {
 
           <div className="pt-4 border-t space-y-3">
             {authenticated && user ? (
-              <>
-                <Link href="/dashboard">Dashboard</Link>
-                <Link href="/profile">Profile</Link>
+              <div className="flex flex-col gap-2">
+                <Link href="/dashboard">
+                  <Button className="w-full">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Link href="/settings">
+                  <Button className="w-full">
+                    Settings
+                  </Button>
+                </Link>
                 <Button
                   variant="destructive"
                   className="w-full"
@@ -121,7 +128,7 @@ export function Navbar() {
                 >
                   Logout
                 </Button>
-              </>
+              </div>
             ) : (
               <div className="flex flex-col gap-2">
                 <Button className="bg-primary text-white rounded-md">
