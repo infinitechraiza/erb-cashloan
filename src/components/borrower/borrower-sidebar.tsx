@@ -32,7 +32,7 @@ export function BorrowerSidebar() {
     { href: '/dashboard/loans', label: 'Loans', icon: DollarSign },
     { href: '/dashboard/payments', label: 'Payments', icon: TrendingUp },
     { href: '/dashboard/documents', label: 'Documents', icon: FileSearchCorner },
-  ];
+  ];  
 
   const isActive = (href: string) => pathname === href;
 
@@ -95,21 +95,6 @@ export function BorrowerSidebar() {
 
         {/* User Info at Bottom */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xs font-semibold text-primary">
-                {user?.first_name?.[0]}{user?.last_name?.[0]}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {user?.first_name} {user?.last_name}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user?.email}
-              </p>
-            </div>
-          </div>
           <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
             Logout
           </Button>
@@ -144,21 +129,6 @@ export function BorrowerSidebar() {
 
         {/* User Info at Bottom */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xs font-semibold text-primary">
-                {user?.first_name?.[0]}{user?.last_name?.[0]}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {user?.first_name} {user?.last_name}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user?.email}
-              </p>
-            </div>
-          </div>
           <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
             Logout
           </Button>

@@ -231,7 +231,7 @@ export default function BorrowerDashboard() {
     return (
         <div className="flex min-h-screen bg-background">
             <BorrowerSidebar />
-            <div className="flex-1 lg:ml-0">
+            <div className="flex-1">
                 <div className="lg:hidden h-16" />
 
                 {/* Profile Header */}

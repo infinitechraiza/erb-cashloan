@@ -1,17 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-context"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { LenderSidebar } from "@/components/lender/lender-sidebar"
-import { DollarSign, TrendingUp, FileText } from "lucide-react"
+import { Wallet, HandCoins, CreditCard, TrendingUp } from "lucide-react"
+import { Chart as ChartJS, CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend, PointElement, LineElement } from "chart.js"
+import { Pie, Line } from "react-chartjs-2"
 
-interface User {
+ChartJS.register(CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend, PointElement, LineElement)
+
+interface BorrowerUser {
     id: number
-    firstName: string
-    lastName: string
+    first_name: string
+    last_name: string
     email: string
     phone?: string
     city?: string
@@ -21,228 +25,323 @@ interface User {
 
 interface Loan {
     id: number
-    loan_number: string
-    outstanding_balance: number
-    type: string
-    principal_amount: number
+    type?: string
+    principal_amount?: number
     approved_amount: number
-    interest_rate: number
-    term_months: number
+    outstanding_balance: number
+    interest_rate?: number
+    term_months?: number
     status: string
     created_at: string
-    updated_at: string
-    next_payment_date?: string
-    borrower?: { first_name: string; last_name: string }
+    updated_at?: string
+    borrower?: BorrowerUser
+    user_id?: number
 }
 
-interface LoanStats {
-    totalBorrowed: number
-    monthlyPayment: number
-    outstandingBalance: number
-    nextPayment: string | null
-}
-
-export default function LenderDashboard() {
+export default function AdminDashboard() {
     const router = useRouter()
-    const { authenticated, loading: authLoading } = useAuth()
-    const [user, setUser] = useState<User | null>(null)
+    const { authenticated } = useAuth()
+    const [users, setUsers] = useState<BorrowerUser[]>([])
     const [loans, setLoans] = useState<Loan[]>([])
-    const [activeLoans, setActiveLoans] = useState<Loan[]>([])
-    const [loanStats, setLoanStats] = useState<LoanStats>({
-        totalBorrowed: 0,
-        monthlyPayment: 0,
-        outstandingBalance: 0,
-        nextPayment: null,
-    })
     const [loading, setLoading] = useState(true)
+    const [search, setSearch] = useState("")
 
     useEffect(() => {
-        if (!authenticated && !authLoading) {
+        if (!authenticated) {
             router.push("/login")
             return
         }
-        if (authenticated) {
-            fetchUserAndLoans()
-        }
-    }, [authenticated, authLoading, router])
+        if (authenticated) fetchAdminData()
+    }, [authenticated, router])
 
-    const fetchUserAndLoans = async () => {
+    const fetchAdminData = async () => {
         setLoading(true)
         try {
             const token = localStorage.getItem("token")
             if (!token) throw new Error("Unauthorized")
 
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
-            // Fetch authenticated user
-            const userRes = await fetch(`${baseUrl}/api/auth/me`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            if (!userRes.ok) throw new Error("Failed to fetch user")
-            const userData = await userRes.json()
-            const u = userData.user || userData
-            setUser({
-                id: u.id,
-                firstName: u.first_name,
-                lastName: u.last_name,
-                email: u.email,
-                phone: u.phone,
-                city: u.city,
-                postalCode: u.postal_code,
-                created_at: u.created_at,
-            })
+            const [usersRes, loansRes] = await Promise.all([
+                fetch(`${baseUrl}/api/user`, { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`${baseUrl}/api/loans?include=borrower`, { headers: { Authorization: `Bearer ${token}` } }),
+            ])
 
-            // Fetch lender loans
-            const loansRes = await fetch(`${baseUrl}/api/lenders/me/loans`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
+            if (!usersRes.ok) throw new Error("Failed to fetch users")
             if (!loansRes.ok) throw new Error("Failed to fetch loans")
+
+            const usersData = await usersRes.json()
             const loansData = await loansRes.json()
-            const loanList: Loan[] = loansData.loans || []
 
-            // Compute stats
-            let totalBorrowed = 0
-            let monthlyPayment = 0
-            let outstandingBalance = 0
-            let nextPayment: string | null = null
+            const allUsers: BorrowerUser[] = Array.isArray(usersData?.users || usersData?.data || usersData)
+                ? usersData?.users || usersData?.data || usersData
+                : []
 
-            const active = loanList.filter(
-                (l) => l.status.toLowerCase() === "approved" && Number(l.outstanding_balance) > 0
-            )
+            const allLoans: Loan[] = Array.isArray(loansData?.loans || loansData?.data || loansData)
+                ? loansData?.loans || loansData?.data || loansData
+                : []
 
-            loanList.forEach((l) => {
-                totalBorrowed += Number(l.approved_amount)
-                outstandingBalance += Number(l.outstanding_balance)
-            })
-
-            active.forEach((l) => {
-                monthlyPayment +=
-                    Number(l.approved_amount) / Number(l.term_months) +
-                    (Number(l.approved_amount) * Number(l.interest_rate)) / 100 / Number(l.term_months)
-
-                if (!nextPayment && l.next_payment_date) {
-                    nextPayment = l.next_payment_date
+            // Ensure each loan has a borrower reference
+            allLoans.forEach(l => {
+                if (!l.borrower && l.user_id) {
+                    const borrower = allUsers.find(u => u.id === l.user_id)
+                    if (borrower) l.borrower = borrower
                 }
             })
 
-            setLoanStats({ totalBorrowed, monthlyPayment, outstandingBalance, nextPayment })
-            setActiveLoans(active)
-            setLoans(loanList)
-        } catch (err: any) {
-            console.error("Dashboard fetch error:", err)
+            setUsers(allUsers)
+            setLoans(allLoans)
+        } catch (error) {
+            console.error("Admin fetch error:", error)
+            localStorage.removeItem("token")
+            router.push("/login")
         } finally {
             setLoading(false)
         }
     }
 
-    const handleLogout = async () => {
-        const token = localStorage.getItem("token")
-        if (token) {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/auth/logout`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            })
-        }
-        localStorage.removeItem("token")
-        router.push("/login")
+    const loansWithBorrowers = useMemo(() => loans.filter(l => l.borrower), [loans])
+
+    // --- Stats ---
+    const activeLoans = useMemo(
+        () => loansWithBorrowers.filter(l => l.status === "approved" && l.outstanding_balance > 0),
+        [loansWithBorrowers]
+    );
+
+    const totalBorrowers = useMemo(
+        () => new Set(loansWithBorrowers.map(l => l.borrower?.id)).size,
+        [loansWithBorrowers]
+    );
+
+    // Total approved volume
+    const totalLoanVolume = useMemo(
+        () => loansWithBorrowers
+            .filter(l => l.status === "approved")
+            .reduce((sum, l) => sum + (l.approved_amount || 0), 0),
+        [loansWithBorrowers]
+    );
+
+    // Repaid loans & repayment rate
+    const repaidLoans = useMemo(
+        () => loansWithBorrowers.filter(l => l.status === "approved" && l.outstanding_balance === 0),
+        [loansWithBorrowers]
+    );
+
+    const repaymentRate = useMemo(
+        () => loansWithBorrowers.length > 0
+            ? ((repaidLoans.length / loansWithBorrowers.length) * 100).toFixed(1)
+            : "0",
+        [loansWithBorrowers, repaidLoans]
+    );
+
+    // --- Loan type counts & total volume per type ---
+    const loanTypeCounts = useMemo(() => {
+        const counts: Record<string, number> = {}
+        loansWithBorrowers.forEach(l => {
+            const type = l.type || "Other"
+            counts[type] = (counts[type] || 0) + 1
+        })
+        return counts
+    }, [loansWithBorrowers])
+
+    const loanTypeVolumes = useMemo(() => {
+        const volumes: Record<string, number> = {}
+        loansWithBorrowers.forEach(l => {
+            const type = l.type || "Other"
+            volumes[type] = (volumes[type] || 0) + (l.approved_amount || 0)
+        })
+        return volumes
+    }, [loansWithBorrowers])
+
+    const loanTypeData = {
+        labels: Object.keys(loanTypeCounts),
+        datasets: [{
+            label: "Number of Loans",
+            data: Object.values(loanTypeCounts),
+            backgroundColor: ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"],
+        }],
     }
 
-    if (loading || authLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <p className="text-muted-foreground">Loading dashboard...</p>
-            </div>
-        )
+    const loanVolumeData = {
+        labels: Object.keys(loanTypeVolumes),
+        datasets: [{
+            label: "Total Volume (PHP)",
+            data: Object.values(loanTypeVolumes),
+            backgroundColor: ["#34D399", "#60A5FA", "#FBBF24", "#F87171", "#A78BFA"],
+        }],
     }
 
     return (
-        <div className="min-h-screen bg-background flex">
+        <div className="flex min-h-screen bg-background">
             <LenderSidebar />
-            <div className="flex-1">
-                <header className="border-b border-border bg-card">
-                    <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                        <h1 className="text-2xl font-bold text-primary">LoanHub Lender</h1>
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm text-muted-foreground">
-                                {user?.firstName} {user?.lastName}
-                            </span>
-                            <Button variant="outline" onClick={handleLogout}>
-                                Logout
-                            </Button>
-                        </div>
-                    </div>
+            <div className="flex-1 lg:ml-0">
+                <div className="lg:hidden h-16" />
+                <header className="border-b border-border bg-card px-4 sm:px-6 py-4">
+                    <h2 className="text-2xl font-semibold">Lender Dashboard</h2>
                 </header>
 
-                <main className="max-w-7xl mx-auto px-6 py-8">
-                    {/* Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <Card className="p-4 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Portfolio Value</p>
-                                <p className="text-xl font-bold">
-                                    {loanStats.totalBorrowed.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                                </p>
+                <main className="p-4 sm:p-6">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Borrowers</p>
+                                    <p className="text-2xl font-bold text-foreground mt-1">{loading ? "--" : totalBorrowers}</p>
+                                </div>
+                                <div className="p-2 text-gray-500 bg-emerald-100 border-gray-300 rounded-sm">
+                                    <Wallet className="h-5 w-5" />
+                                </div>
                             </div>
-                            <DollarSign className="h-6 w-6 text-emerald-600" />
                         </Card>
 
-                        <Card className="p-4 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Active Loans</p>
-                                <p className="text-xl font-bold">{activeLoans.length}</p>
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Active Loans</p>
+                                    <p className="text-2xl font-bold text-foreground mt-1">{loading ? "--" : activeLoans.length}</p>
+                                </div>
+                                <div className="p-2 text-gray-500 bg-emerald-100 border-gray-300 rounded-sm">
+                                    <HandCoins className="h-5 w-5" />
+                                </div>
                             </div>
-                            <FileText className="h-6 w-6 text-blue-600" />
                         </Card>
 
-                        <Card className="p-4 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Monthly Returns</p>
-                                <p className="text-xl font-bold">
-                                    {loanStats.monthlyPayment.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                                </p>
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Loan Volume</p>
+                                    <p className="text-2xl font-bold text-foreground mt-1">
+                                        {loading ? "--" : totalLoanVolume.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                                    </p>
+                                </div>
+                                <div className="p-2 text-gray-500 bg-emerald-100 border-gray-300 rounded-sm">
+                                    <CreditCard className="h-5 w-5" />
+                                </div>
                             </div>
-                            <TrendingUp className="h-6 w-6 text-purple-600" />
+                        </Card>
+
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Repayment Rate</p>
+                                    <p className="text-2xl font-bold text-foreground mt-1">{loading ? "--" : repaymentRate}%</p>
+                                </div>
+                                <div className="p-2 text-gray-500 bg-emerald-100 border-gray-300 rounded-sm">
+                                    <TrendingUp className="h-5 w-5" />
+                                </div>
+                            </div>
                         </Card>
                     </div>
 
-                    {/* Active Loans Table */}
-                    <Card className="p-6">
-                        <h2 className="text-lg font-semibold mb-4">Your Loans</h2>
-                        {activeLoans.length === 0 ? (
-                            <p className="text-muted-foreground">No active loans yet.</p>
-                        ) : (
+                    {/* Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        {/* Loan Type Count */}
+                        <Card className="p-6 flex flex-col justify-between" style={{ minHeight: 350 }}>
+                            <h2 className="text-lg font-semibold mb-4">Loan Status Distribution</h2>
+                            <div className="flex-1">
+                                <Pie
+                                    data={loanTypeData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { position: 'bottom', labels: { padding: 20 } } },
+                                    }}
+                                />
+                            </div>
+                        </Card>
+
+                        {/* Loan Type Volume */}
+                        <Card className="p-6 flex flex-col justify-between" style={{ minHeight: 350 }}>
+                            <h2 className="text-lg font-semibold mb-4">Monthly Loan Trends</h2>
+                            <div className="flex-1">
+                                <Line
+                                    data={loanVolumeData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { position: 'top' } },
+                                        scales: { x: { grid: { display: false } }, y: { grid: { drawBorder: false } } },
+                                    }}
+                                />
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        {/* Active Loans */}
+                        <div className="p-6 border rounded-md bg-accent-foreground shadow-md">
+                            <h2 className="text-lg font-semibold mb-4">Active Loans</h2>
                             <table className="w-full text-left table-auto border-collapse">
                                 <thead>
                                     <tr className="border-b border-gray-200">
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Type</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Approved Amount</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Outstanding</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Interest Rate</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Term</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Status</th>
-                                        <th className="px-4 py-2 text-sm text-muted-foreground">Created</th>
+                                        <th className="px-4 py-2">Type</th>
+                                        <th className="px-4 py-2">Approved Amount</th>
+                                        <th className="px-4 py-2">Principal Amount</th>
+                                        <th className="px-4 py-2">Outstanding</th>
+                                        <th className="px-4 py-2">Interest Rate</th>
+                                        <th className="px-4 py-2">Term</th>
+                                        <th className="px-4 py-2">Status</th>
+                                        <th className="px-4 py-2">Created</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {activeLoans.map((loan) => (
-                                        <tr key={loan.id} className="border-b border-gray-100">
-                                            <td className="px-4 py-2">{loan.type}</td>
-                                            <td className="px-4 py-2">
-                                                {Number(loan.approved_amount).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                {Number(loan.outstanding_balance).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                                            </td>
-                                            <td className="px-4 py-2">{loan.interest_rate}%</td>
-                                            <td className="px-4 py-2">{loan.term_months} months</td>
-                                            <td className="px-4 py-2 capitalize">{loan.status}</td>
-                                            <td className="px-4 py-2">{new Date(loan.created_at).toLocaleDateString("en-PH")}</td>
+                                    {activeLoans.map(l => (
+                                        <tr key={l.id} className="border-b border-gray-100">
+                                            <td className="px-4 py-2">{l.type}</td>
+                                            <td className="px-4 py-2">{l.approved_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</td>
+                                            <td className="px-4 py-2">{(l.principal_amount || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</td>
+                                            <td className="px-4 py-2">{l.outstanding_balance.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</td>
+                                            <td className="px-4 py-2">{l.interest_rate}%</td>
+                                            <td className="px-4 py-2">{l.term_months} months</td>
+                                            <td className="px-4 py-2 capitalize">{l.status}</td>
+                                            <td className="px-4 py-2">{new Date(l.created_at).toLocaleDateString("en-PH")}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                        )}
-                    </Card>
+                        </div>
+
+                        {/* Payment History */}
+                        <div className="p-6 border rounded-md bg-accent-foreground shadow-md">
+                            <h2 className="text-lg font-semibold mb-4">Payment History</h2>
+
+                            <table className="w-full text-left table-auto border-collapse">
+                                <thead>
+                                    <tr className="border-b border-gray-200">
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Name</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Email</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Phone</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Amount Paid</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Outstanding Balance</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Status</th>
+                                        <th className="px-4 py-2 text-sm text-muted-foreground">Last Updated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loans.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="pt-8 pb-3 text-center">
+                                                No payment history yet.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        loans.map((l) => (
+                                            <tr key={l.id} className="border-b border-gray-100">
+                                                <td className="px-4 py-2">{l.borrower?.first_name} {l.borrower?.last_name}</td>
+                                                <td className="px-4 py-2">{l.borrower?.email}</td>
+                                                <td className="px-4 py-2">{l.borrower?.phone || "--"}</td>
+                                                <td className="px-4 py-2">{((l.principal_amount || 0) - (l.outstanding_balance || 0)).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</td>
+                                                <td className="px-4 py-2">{(l.outstanding_balance || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</td>
+                                                <td className="px-4 py-2 capitalize">{l.status}</td>
+                                                <td className="px-4 py-2">{l.updated_at ? new Date(l.updated_at).toLocaleDateString("en-PH") : "--"}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </main>
             </div>
         </div>

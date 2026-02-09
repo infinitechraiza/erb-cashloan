@@ -320,6 +320,7 @@ export default function AdminDashboard() {
 
                     {/* Tabs */}
                     <div className="flex flex-col gap-3">
+                        {/* Pending Approvals */}
                         <div className="p-6 border rounded-md bg-accent-foreground shadow-md">
                             <h2 className="text-lg font-semibold mb-4">Pending Approval</h2>
 
@@ -389,6 +390,7 @@ export default function AdminDashboard() {
                             </table>
                         </div>
 
+                        {/* Payment History */}
                         <div className="p-6 border rounded-md bg-accent-foreground shadow-md">
                             <h2 className="text-lg font-semibold mb-4">Payment History</h2>
 
