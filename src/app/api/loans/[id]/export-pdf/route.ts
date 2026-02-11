@@ -1,9 +1,8 @@
-// File: app/api/loans/[id]/payment-schedule/export-pdf/route.ts
+// File: app/api/loans/[id]/export-pdf/route.ts
 
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
 export async function GET(
     request: NextRequest,
@@ -11,22 +10,30 @@ export async function GET(
 ) {
     try {
         // Await params in Next.js 15+
-        const { id } = await context.params
+        const { id: loanId } = await context.params
 
-        // Get authentication token from cookies
-        const cookieStore = await cookies()
-        const token = cookieStore.get("token")?.value
+        // Try to get token from BOTH cookies AND Authorization header
+        const cookieStore = await cookies();
+        let token = cookieStore.get('token')?.value;
 
+        // If no token in cookies, try Authorization header
         if (!token) {
-            console.error("No auth token found")
-            return NextResponse.json(
-                { success: false, message: "Unauthorized - no token" },
-                { status: 401 }
-            )
+            const authHeader = request.headers.get('Authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.replace('Bearer ', '');
+            }
         }
 
+        if (!token) {
+            return NextResponse.json(
+                { success: false, message: 'Not authenticated. Please log in again.' },
+                { status: 401 }
+            );
+        }
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
         // Construct Laravel API URL for payment schedule PDF
-        const laravelUrl = `${API_URL}/loans/${id}/payment-schedule/export-pdf`
+        const laravelUrl = `${API_URL}/loans/${loanId}/export-pdf`
 
         console.log("Fetching payment schedule PDF from:", laravelUrl)
 
@@ -61,7 +68,7 @@ export async function GET(
         const buffer = await response.arrayBuffer()
 
         // Generate filename with loan ID and current date
-        const filename = `loan-${id}-payment-schedule-${new Date().toISOString().split('T')[0]}.pdf`
+        const filename = `loan-${loanId}-payment-schedule-${new Date().toISOString().split('T')[0]}.pdf`
 
         // Return PDF response
         return new NextResponse(buffer, {

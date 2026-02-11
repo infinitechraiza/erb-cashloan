@@ -96,7 +96,7 @@ export default function PaymentsPage() {
   }
 
   useEffect(() => {
-   
+
 
     if (authenticated) {
       fetchPayments()
@@ -111,14 +111,15 @@ export default function PaymentsPage() {
 
   const handleMakePaymentForLoan = (loan: Loan, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent card click when clicking pay button
-    
+
     const monthlyPayment =
       loan.monthly_payment ||
       loan.next_payment_amount ||
       (parseFloat(loan.outstanding_balance || loan.principal_amount || loan.amount) / loan.term_months).toFixed(2)
 
+    // Create a proper payment object with all required fields
     const payment: Payment = {
-      id: loan.id,
+      id: 0, // Temporary ID since this is a new payment
       amount: monthlyPayment,
       due_date: loan.next_payment_date || new Date().toISOString(),
       status: "pending",
@@ -128,6 +129,7 @@ export default function PaymentsPage() {
       },
     }
 
+    console.log("Creating payment for loan:", payment)
     setSelectedPayment(payment)
     setPaymentModalOpen(true)
   }
@@ -205,8 +207,8 @@ export default function PaymentsPage() {
                       (parseFloat(loan.outstanding_balance || loan.principal_amount || loan.amount) / loan.term_months).toFixed(2)
 
                     return (
-                      <Card 
-                        key={loan.id} 
+                      <Card
+                        key={loan.id}
                         className="p-4 sm:p-6 border-green-200 bg-green-50/30 cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => handleLoanCardClick(loan.id)}
                       >
@@ -267,8 +269,8 @@ export default function PaymentsPage() {
                             )}
                           </div>
 
-                          <Button 
-                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700" 
+                          <Button
+                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
                             onClick={(e) => handleMakePaymentForLoan(loan, e)}
                           >
                             <CreditCard className="h-4 w-4 mr-2" />

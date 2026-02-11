@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server"
 import { cookies } from 'next/headers';
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // Try to get token from BOTH cookies AND Authorization header
     const cookieStore = await cookies();
     let token = cookieStore.get('token')?.value;
-    
+
     // If no token in cookies, try Authorization header
     if (!token) {
       const authHeader = request.headers.get('Authorization');
@@ -21,69 +21,63 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+    
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    // Get the FormData from the request
+    const formData = await request.formData()
 
+    console.log("[Borrower Payments API] Submitting payment:", {
+      loan_id: formData.get('loan_id'),
+      amount: formData.get('amount'),
+      payment_number: formData.get('payment_number')
+    })
 
-    const url = `${laravelUrl}/api/loans`;
-
-    console.log('[Next.js] Fetching loans from:', url);
-
-    const response = await fetch(url, {
-      method: 'GET',
+    // Forward FormData to Laravel
+    const response = await fetch(`${laravelUrl}/api/borrower/payments`, {
+      method: "POST",
       headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`,
-        "X-Requested-With": "XMLHttpRequest",
+        Authorization: `Bearer ${token}`,
+        // Don't set Content-Type - FormData will set it with boundary
       },
-      cache: 'no-store',
-    });
+      body: formData,
+    })
 
-    console.log('[Next.js] Laravel response status:', response.status);
+    console.log("[Borrower Payments API] Laravel response status:", response.status)
+
+    const contentType = response.headers.get('content-type')
 
     if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      let error;
+      let errorMessage = "Failed to record payment"
 
       if (contentType && contentType.includes('application/json')) {
-        error = await response.json();
+        const error = await response.json()
+        console.error("[Borrower Payments API] Error:", error)
+        errorMessage = error.message || errorMessage
+        return NextResponse.json(error, { status: response.status })
       } else {
-        const text = await response.text();
-        console.error('[Next.js] Non-JSON error response:', text);
-        error = { message: 'Invalid response from server' };
+        const text = await response.text()
+        console.error("[Borrower Payments API] Non-JSON error:", text.substring(0, 500))
+        return NextResponse.json({
+          message: errorMessage,
+          error: "Server error"
+        }, { status: response.status })
       }
-
-      console.error('[Next.js] Laravel error:', error);
-
-      return NextResponse.json(
-        { message: error.message || 'Failed to fetch loans' },
-        { status: response.status }
-      );
     }
 
-    const data = await response.json();
+    const data = await response.json()
+    console.log("[Borrower Payments API] Success:", data)
 
-    console.log('[Next.js] Laravel response structure:', {
-      hasData: !!data.data,
-      dataLength: data.data?.length || 0,
-      total: data.total,
-      keys: Object.keys(data)
-    });
-
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: 201 })
   } catch (error) {
-    console.error('[Next.js] Get loans error:', error);
-
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNREFUSED') {
-      return NextResponse.json(
-        { message: 'Cannot connect to Laravel backend. Make sure it is running on the configured URL.' },
-        { status: 503 }
-      );
-    }
-
+    console.error("[Borrower Payments API] Exception:", error)
     return NextResponse.json(
-      { message: 'An error occurred', error: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        success: false,
+        message: "Internal server error",
+        error: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
-    );
+    )
   }
 }

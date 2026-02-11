@@ -63,6 +63,56 @@ export default function PaymentHistoryPage() {
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
     const [paymentModalOpen, setPaymentModalOpen] = useState(false)
 
+    const recomputeStatuses = (payments: Payment[]) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        // Sort by payment number
+        const sorted = [...payments].sort((a, b) => a.payment_number - b.payment_number)
+
+        // Find the last paid payment
+        let lastPaidIndex = -1
+        for (let i = 0; i < sorted.length; i++) {
+            if (sorted[i].status === "paid" || sorted[i].paid_date) {
+                lastPaidIndex = i
+            }
+        }
+
+        return sorted.map((p, index) => {
+            // If already paid -> keep as paid
+            if (p.status === "paid" || p.paid_date) {
+                return { ...p, status: "paid" }
+            }
+
+            // If this payment comes after the last paid payment, it's pending
+            if (index > lastPaidIndex) {
+                const due = new Date(p.due_date)
+                due.setHours(0, 0, 0, 0)
+
+                // Check if it's overdue or missed based on date
+                if (due < today) {
+                    const daysPast = Math.floor((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24))
+                    return {
+                        ...p,
+                        status: daysPast > 30 ? "missed" : "overdue",
+                    }
+                }
+
+                // Otherwise it's pending (future payment)
+                return {
+                    ...p,
+                    status: "pending",
+                }
+            }
+
+            // This shouldn't happen, but just in case
+            return {
+                ...p,
+                status: "pending",
+            }
+        })
+    }
+
     const fetchPaymentHistory = async () => {
         try {
             const token = localStorage.getItem("token")
@@ -103,15 +153,24 @@ export default function PaymentHistoryPage() {
                     payments = generatePaymentSchedule(loan)
                 }
 
+                const updatedPayments = recomputeStatuses(payments)
+
+                console.log("UPDATED PAYMENTS:", updatedPayments)
+                console.log("PENDING COUNT:", updatedPayments.filter(p => p.status === 'pending').length)
+
                 setPaymentSchedule({
                     loan,
-                    payments,
+                    payments: updatedPayments,
                 })
+
             } catch (err) {
                 // Fallback to generated schedule
+                const generatedPayments = generatePaymentSchedule(loan)
+                const updatedPayments = recomputeStatuses(generatedPayments)
+                
                 setPaymentSchedule({
                     loan,
-                    payments: generatePaymentSchedule(loan),
+                    payments: updatedPayments,
                 })
             }
         } catch (err) {
@@ -132,10 +191,12 @@ export default function PaymentHistoryPage() {
 
         const payments: Payment[] = []
         const today = new Date()
+        today.setHours(0, 0, 0, 0)
 
         for (let i = 1; i <= loan.term_months; i++) {
             const dueDate = new Date(startDate)
             dueDate.setMonth(dueDate.getMonth() + i)
+            dueDate.setHours(0, 0, 0, 0)
 
             let status = 'pending'
             if (dueDate < today) {
@@ -500,6 +561,74 @@ export default function PaymentHistoryPage() {
                                 </div>
                             </div>
                         </Card>
+
+                        {/* Pending Payments Section */}
+                        {(() => {
+                            const paidCount = paymentSchedule.payments.filter(p => p.status === 'paid').length
+                            const pendingCount = paymentSchedule.loan.term_months - paidCount
+                            const unpaidPayments = paymentSchedule.payments.filter(p => p.status !== 'paid')
+                            
+                            return pendingCount > 0 && (
+                                <Card className="p-6 mt-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Clock className="h-5 w-5 text-blue-600" />
+                                        <h3 className="text-lg font-semibold">Pending Payments</h3>
+                                        <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+                                            {pendingCount}
+                                        </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {unpaidPayments.map((payment) => (
+                                            <Card
+                                                key={payment.id}
+                                                className={`p-4 print-payment-card cursor-pointer transition-all hover:shadow-md ${getStatusColor(payment.status)}`}
+                                                onClick={() => handlePayClick(payment)}
+                                            >
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground font-medium">
+                                                            Payment {payment.payment_number} of {paymentSchedule.loan.term_months}
+                                                        </p>
+                                                        <p className="text-lg font-bold mt-1">
+                                                            ₱{parseFloat(payment.amount).toLocaleString("en-US", {
+                                                                minimumFractionDigits: 2,
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                   pending
+                                                </div>
+
+                                                <div className="space-y-2 text-sm">
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Calendar className="h-3.5 w-3.5" />
+                                                        <span>
+                                                            Due: {new Date(payment.due_date).toLocaleDateString("en-US", {
+                                                                month: "short",
+                                                                day: "numeric",
+                                                                year: "numeric",
+                                                            })}
+                                                        </span>
+                                                    </div>
+
+                                                    <Button
+                                                        size="sm"
+                                                        variant={payment.status === 'overdue' || payment.status === 'missed' ? 'destructive' : 'default'}
+                                                        className="w-full mt-2 no-print"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handlePayClick(payment)
+                                                        }}
+                                                    >
+                                                        <CreditCard className="h-3.5 w-3.5 mr-1" />
+                                                        Pay Now
+                                                    </Button>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </Card>
+                            )
+                        })()}
                     </main>
                 </div>
 
